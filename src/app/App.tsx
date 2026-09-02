@@ -52,6 +52,7 @@ import {
 } from "./lib/expenses";
 import { statusColor } from "./lib/helpers";
 import { LoginPage } from "./views/LoginPage";
+import { MobileBlockedPage } from "./views/MobileBlockedPage";
 import { Dashboard } from "./views/Dashboard";
 import { TemplateDesigner } from "./designer/TemplateDesigner";
 import { ProfilesPage } from "./views/ProfilesPage";
@@ -61,6 +62,7 @@ import { TemplateWorkspacePage } from "./views/TemplateWorkspacePage";
 import { SettingsPage } from "./views/SettingsPage";
 import { OrganismesPage } from "./views/OrganismesPage";
 import { OrganismeProvider, type OrganismesUpdater } from "./lib/settings";
+import { useIsMobile } from "./components/ui/use-mobile";
 
 const VIEW_SCREEN: Partial<Record<View, string>> = {
   dashboard: "dashboard",
@@ -841,6 +843,7 @@ function RecentTable({
 }
 
 export default function App() {
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -937,6 +940,10 @@ export default function App() {
   const user = sessionUser
     ? applyOrganisme(syncUserRole(sessionUser, profiles), findOrganisme(organismes, sessionUser.organismeId))
     : null;
+
+  if (isMobile) {
+    return <MobileBlockedPage />;
+  }
 
   if (loading) {
     return (
