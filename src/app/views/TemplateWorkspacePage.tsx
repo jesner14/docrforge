@@ -26,6 +26,7 @@ import { statusColor } from "../lib/helpers";
 import { withOrganismeHeader } from "../lib/organismeHeader";
 
 type DocPersistInput = SavedDocument[] | ((orgDocs: SavedDocument[]) => SavedDocument[]);
+type DocPersistOptions = { immediate?: boolean };
 
 export function TemplateWorkspacePage({
   template,
@@ -41,7 +42,7 @@ export function TemplateWorkspacePage({
   template: DocTemplate;
   user: User;
   documents: SavedDocument[];
-  onDocumentsChange: (input: DocPersistInput) => void;
+  onDocumentsChange: (input: DocPersistInput, options?: DocPersistOptions) => void;
   modelChoices: DocTemplate[];
   onApplyModel: (id: string) => void;
   onSaveAsTemplate?: (data: DocData) => void;
@@ -91,37 +92,26 @@ export function TemplateWorkspacePage({
       setData(merged);
       dataRef.current = merged;
 
-      const run = () => {
+      const run = (immediateSave = false) => {
         const id = activeIdRef.current;
         if (!id) return;
-        onDocumentsChange((orgDocs) =>
-          orgDocs.map((d) => (d.id === id ? patchSavedDocument(d, template, merged) : d))
+        onDocumentsChange(
+          (orgDocs) => orgDocs.map((d) => (d.id === id ? patchSavedDocument(d, template, merged) : d)),
+          immediateSave ? { immediate: true } : undefined
         );
       };
 
       if (immediate) {
         if (saveTimer.current) clearTimeout(saveTimer.current);
-        run();
+        run(true);
         return;
       }
 
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(run, 400);
+      saveTimer.current = setTimeout(() => run(false), 400);
     },
     [onDocumentsChange, template, user]
   );
-
-  useEffect(() => {
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      const id = activeIdRef.current;
-      if (!id) return;
-      const merged = withOrganismeHeader(dataRef.current, user);
-      onDocumentsChange((orgDocs) =>
-        orgDocs.map((d) => (d.id === id ? patchSavedDocument(d, template, merged) : d))
-      );
-    };
-  }, [onDocumentsChange, template, user]);
 
   useEffect(() => {
     setActiveId(null);
@@ -160,7 +150,7 @@ export function TemplateWorkspacePage({
   const createDoc = () => {
     const fresh = freshDocData(template, user, currency, year, month);
     const doc = newSavedDocument(template, user, fresh, year, month);
-    onDocumentsChange((orgDocs) => [doc, ...orgDocs]);
+    onDocumentsChange((orgDocs) => [doc, ...orgDocs], { immediate: true });
     setActiveId(doc.id);
     setData(fresh);
     dataRef.current = fresh;
@@ -168,19 +158,21 @@ export function TemplateWorkspacePage({
 
   const removeDoc = (id: string) => {
     if (!confirm("Supprimer ce document ?")) return;
-    onDocumentsChange((orgDocs) => orgDocs.filter((d) => d.id !== id));
+    onDocumentsChange((orgDocs) => orgDocs.filter((d) => d.id !== id), { immediate: true });
     if (activeId === id) setActiveId(null);
   };
 
   const handleExport = (fmt: ExportFormat) => {
     if (!active) return;
     exportDocument(fmt, documentTitle(template, data), previewRef.current, template, { ...withOrganismeHeader(data, user), currency });
-    onDocumentsChange((orgDocs) =>
-      orgDocs.map((d) =>
-        d.id === active.id
-          ? { ...patchSavedDocument(d, template, withOrganismeHeader(data, user)), status: "Finalisé" }
-          : d
-      )
+    onDocumentsChange(
+      (orgDocs) =>
+        orgDocs.map((d) =>
+          d.id === active.id
+            ? { ...patchSavedDocument(d, template, withOrganismeHeader(data, user)), status: "Finalisé" }
+            : d
+        ),
+      { immediate: true }
     );
     setExported(fmt);
     setTimeout(() => setExported(null), 2800);

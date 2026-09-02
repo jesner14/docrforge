@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
 import {
   Building2,
@@ -121,6 +121,7 @@ function Workspace({
   const profile = profileOf(user, profiles);
   const modules = modulesOf(profile);
   const can = (id: string) => hasScreen(profile, id);
+  const roleMeta = ROLE_META[user.role] ?? ROLE_META.facturation;
 
   const [view, setView] = useState<View>(() => defaultView(profile));
   const [search, setSearch] = useState("");
@@ -140,7 +141,6 @@ function Workspace({
   const [saveAsName, setSaveAsName] = useState("");
   const [saveAsData, setSaveAsData] = useState<DocData>({});
 
-  const roleMeta = ROLE_META[user.role] ?? ROLE_META.facturation;
   const allowedIds = useMemo(() => allowedTemplateIds(profile), [profile]);
   const catalog = useMemo(() => templatesForAllowedIds(allowedIds, customTemplates), [allowedIds, customTemplates]);
   const selected = selectedId ? findTemplate(selectedId, customTemplates) : undefined;
@@ -178,27 +178,49 @@ function Workspace({
     setTimeout(() => setNotice(null), 2800);
   };
 
-  const persistDocs = useCallback(
-    (input: SavedDocument[] | ((orgDocs: SavedDocument[]) => SavedDocument[])) => {
-      setAllDocuments((prev) => {
-        const orgId = user.organismeId;
-        const orgDocs = prev.filter((d) => belongsToOrganisme(d, orgId));
-        const others = prev.filter((d) => !belongsToOrganisme(d, orgId));
-        const nextOrg = (typeof input === "function" ? input(orgDocs) : input).map((d) => ({
-          ...d,
-          organismeId: orgId,
-        }));
-        const next = [...nextOrg, ...others];
-        void saveDocuments(next)
-          .then((saved) => setAllDocuments(saved))
-          .catch((err) => {
-            console.error(err);
-            flash("Erreur lors de l'enregistrement des documents.");
-          });
-        return next;
+  const allDocumentsRef = useRef(allDocuments);
+  allDocumentsRef.current = allDocuments;
+  const documentsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const documentsSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const pendingDocumentsRef = useRef<SavedDocument[] | null>(null);
+
+  const flushDocumentSave = useCallback(() => {
+    const payload = pendingDocumentsRef.current;
+    if (!payload) return;
+    pendingDocumentsRef.current = null;
+    documentsSaveQueue.current = documentsSaveQueue.current
+      .then(() => saveDocuments(payload))
+      .then((saved) => setAllDocuments(saved))
+      .catch((err) => {
+        console.error(err);
+        flash("Erreur lors de l'enregistrement des documents.");
       });
+  }, [setAllDocuments]);
+
+  const persistDocs = useCallback(
+    (
+      input: SavedDocument[] | ((orgDocs: SavedDocument[]) => SavedDocument[]),
+      options?: { immediate?: boolean }
+    ) => {
+      const prev = allDocumentsRef.current;
+      const orgId = user.organismeId;
+      const orgDocs = prev.filter((d) => belongsToOrganisme(d, orgId));
+      const others = prev.filter((d) => !belongsToOrganisme(d, orgId));
+      const nextOrg = (typeof input === "function" ? input(orgDocs) : input).map((d) => ({
+        ...d,
+        organismeId: orgId,
+      }));
+      const next = [...nextOrg, ...others];
+      pendingDocumentsRef.current = next;
+      setAllDocuments(next);
+      if (documentsSaveTimer.current) clearTimeout(documentsSaveTimer.current);
+      if (options?.immediate) {
+        flushDocumentSave();
+      } else {
+        documentsSaveTimer.current = setTimeout(flushDocumentSave, 500);
+      }
     },
-    [user.organismeId, setAllDocuments]
+    [user.organismeId, setAllDocuments, flushDocumentSave]
   );
 
   const persistExpenseMonths = useCallback(
