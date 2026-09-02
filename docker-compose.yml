@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: docforge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: docforge
+      POSTGRES_PASSWORD: docforge
+      POSTGRES_DB: docforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - docforge_pg_data:/var/lib/postgresql/data
+
+volumes:
+  docforge_pg_data:
