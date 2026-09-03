@@ -403,7 +403,7 @@ export function ExpensesPage({
                   label="PDF"
                   color="#C0392B"
                   onClick={() =>
-                    exportPreviewPdf(`Suivi des dépenses ${monthLabel(year, month)}`, previewRef.current)
+                    void exportPreviewPdf(`Suivi des dépenses ${monthLabel(year, month)}`, previewRef.current)
                   }
                 >
                   <File size={18} strokeWidth={1.75} />

@@ -1,4 +1,4 @@
-import type { DocTemplate, ExpenseMonth, Organisme, Profile, SavedDocument, User } from "./types";
+import type { DocTemplate, ExpenseMonth, Organisme, Profile, RentalMonth, SavedDocument, User } from "./types";
 import { api } from "./api";
 
 export async function loginUser(login: string, password: string) {
@@ -23,8 +23,8 @@ export async function tryRestoreSession() {
   }
 }
 
-export async function saveProfiles(profiles: Profile[]) {
-  const { profiles: saved } = await api.saveProfiles(profiles);
+export async function saveProfiles(organismeId: string, profiles: Profile[]) {
+  const { profiles: saved } = await api.saveProfiles(organismeId, profiles);
   return saved;
 }
 
@@ -34,8 +34,8 @@ export async function saveAppUsers(users: User[]) {
 }
 
 export async function saveOrganismes(organismes: Organisme[]) {
-  const { organismes: saved } = await api.saveOrganismes(organismes);
-  return saved;
+  const { organismes: saved, profiles } = await api.saveOrganismes(organismes);
+  return { organismes: saved, profiles };
 }
 
 export async function saveDocuments(documents: SavedDocument[]) {
@@ -50,5 +50,10 @@ export async function saveCustomTemplates(templates: DocTemplate[]) {
 
 export async function saveExpenseMonths(months: ExpenseMonth[]) {
   const { expenseMonths: saved } = await api.saveExpenseMonths(months);
+  return saved;
+}
+
+export async function saveRentalMonths(months: RentalMonth[]) {
+  const { rentalMonths: saved } = await api.saveRentalMonths(months);
   return saved;
 }

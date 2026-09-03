@@ -1,4 +1,4 @@
-import type { DocTemplate, ExpenseMonth, Organisme, Profile, SavedDocument, User } from "./types";
+import type { DocTemplate, ExpenseMonth, Organisme, Profile, RentalMonth, SavedDocument, User } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -32,6 +32,7 @@ export interface BootstrapData {
   documents: SavedDocument[];
   templates: DocTemplate[];
   expenseMonths: ExpenseMonth[];
+  rentalMonths: RentalMonth[];
 }
 
 export const api = {
@@ -50,15 +51,15 @@ export const api = {
   bootstrap: () => request<BootstrapData>("/api/bootstrap"),
 
   saveOrganismes: (organismes: Organisme[]) =>
-    request<{ organismes: Organisme[] }>("/api/organismes", {
+    request<{ organismes: Organisme[]; profiles: Profile[] }>("/api/organismes", {
       method: "PUT",
       body: JSON.stringify({ organismes }),
     }),
 
-  saveProfiles: (profiles: Profile[]) =>
+  saveProfiles: (organismeId: string, profiles: Profile[]) =>
     request<{ profiles: Profile[] }>("/api/profiles", {
       method: "PUT",
-      body: JSON.stringify({ profiles }),
+      body: JSON.stringify({ organismeId, profiles }),
     }),
 
   saveUsers: (users: User[]) =>
@@ -81,6 +82,12 @@ export const api = {
 
   saveExpenseMonths: (months: ExpenseMonth[]) =>
     request<{ expenseMonths: ExpenseMonth[] }>("/api/expenses", {
+      method: "PUT",
+      body: JSON.stringify({ months }),
+    }),
+
+  saveRentalMonths: (months: RentalMonth[]) =>
+    request<{ rentalMonths: RentalMonth[] }>("/api/rentals", {
       method: "PUT",
       body: JSON.stringify({ months }),
     }),

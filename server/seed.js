@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { query, migrate, isSeeded } from "./db.js";
 import { SEED_ORGANISMES, SEED_PROFILES, SEED_USERS } from "./seed-data.js";
+import { ensureDefaultProfiles, ensureProfilesForAllOrganismes, migrateUsersToOrgProfiles } from "./profiles.js";
 
 async function insertSeed() {
   for (const o of SEED_ORGANISMES) {
@@ -18,11 +19,16 @@ async function insertSeed() {
     );
   }
 
+  await ensureDefaultProfiles(SEED_ORGANISMES[0].id);
+
   for (const p of SEED_PROFILES) {
     await query(
-      `INSERT INTO profiles (id, label, screen_ids) VALUES ($1, $2, $3)
-       ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, screen_ids = EXCLUDED.screen_ids`,
-      [p.id, p.label, JSON.stringify(p.screenIds)]
+      `INSERT INTO profiles (id, label, screen_ids, organisme_id) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (id) DO UPDATE SET
+         label = EXCLUDED.label,
+         screen_ids = EXCLUDED.screen_ids,
+         organisme_id = EXCLUDED.organisme_id`,
+      [p.id, p.label, JSON.stringify(p.screenIds), p.organismeId]
     );
   }
 
@@ -62,6 +68,8 @@ async function insertSeed() {
 
 export async function seedDatabase() {
   await migrate();
+  await ensureProfilesForAllOrganismes();
+  await migrateUsersToOrgProfiles();
   if (await isSeeded()) return false;
   await insertSeed();
   console.log("Base initialisée — superadmin jesner.landa créé.");
@@ -76,12 +84,14 @@ export async function resetDatabase() {
       documents,
       custom_templates,
       expense_months,
+      rental_months,
       users,
       profiles,
       organismes
     RESTART IDENTITY CASCADE
   `);
   await insertSeed();
+  await ensureProfilesForAllOrganismes();
   console.log("Base réinitialisée — superadmin jesner.landa créé.");
 }
 

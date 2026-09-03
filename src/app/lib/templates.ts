@@ -17,6 +17,39 @@ const ITEM_COLS = [
   { key: "unitPrice", label: "Prix unit.", type: "number" as const },
 ];
 
+function invoiceFields(): TemplateField[] {
+  return [
+    { key: "showLegal", label: "Afficher SIRET et n° TVA", type: "checkbox", section: "Options d'affichage" },
+    { key: "showTva", label: "Afficher le détail TVA (HT / TVA / TTC)", type: "checkbox", section: "Options d'affichage" },
+    { key: "showDueDate", label: "Afficher la date d'échéance", type: "checkbox", section: "Options d'affichage" },
+    { key: "showObject", label: "Afficher l'objet", type: "checkbox", section: "Options d'affichage" },
+    { key: "showNotes", label: "Afficher les notes / mentions", type: "checkbox", section: "Options d'affichage" },
+    { key: "companySiret", label: "SIRET", type: "text", section: "Informations légales", showWhen: "showLegal" },
+    { key: "companyTva", label: "N° TVA", type: "text", section: "Informations légales", showWhen: "showLegal" },
+    ...clientFields("Client"),
+    { key: "docNumber", label: "N° facture", type: "text", section: "Document" },
+    { key: "date", label: "Date", type: "date", section: "Document" },
+    { key: "dueDate", label: "Échéance", type: "date", section: "Document", showWhen: "showDueDate" },
+    { key: "object", label: "Objet", type: "text", section: "Document", showWhen: "showObject" },
+    {
+      key: "currency",
+      label: "Devise",
+      type: "select",
+      options: ["EUR", "USD", "FCFA"],
+      section: "Document",
+    },
+    {
+      key: "items",
+      label: "Lignes",
+      type: "table",
+      columns: ITEM_COLS,
+      section: "Lignes",
+    },
+    { key: "taxRate", label: "TVA (%)", type: "number", section: "Lignes", showWhen: "showTva" },
+    { key: "notes", label: "Notes / mentions", type: "textarea", section: "Notes", showWhen: "showNotes" },
+  ];
+}
+
 function commercialFields(opts: {
   numberLabel: string;
   due?: boolean;
@@ -94,43 +127,25 @@ function commercialDefaults(user: User | null, extra: Record<string, unknown> = 
 
 export const BUILTIN_TEMPLATES: DocTemplate[] = [
   {
-    id: "facture-simple",
-    name: "Facture simple",
+    id: "facture",
+    name: "Factures",
     category: "facturation",
-    description: "Facture claire, sans mentions complexes",
+    description: "Facture unique — activez TVA, SIRET, objet et autres options à la carte",
     icon: "🧾",
     color: "#1C2340",
-    layout: "invoice-simple",
+    layout: "invoice",
     builtin: true,
-    fields: commercialFields({ numberLabel: "N° facture", due: true }),
-    defaults: commercialDefaults(null, { docNumber: "2026-090", taxRate: 0, notes: "Merci pour votre confiance." }),
-  },
-  {
-    id: "facture-commerciale",
-    name: "Facture commerciale",
-    category: "facturation",
-    description: "Facture complète avec SIRET, TVA et conditions",
-    icon: "💼",
-    color: "#152038",
-    layout: "invoice-commercial",
-    builtin: true,
-    fields: commercialFields({ numberLabel: "N° facture", due: true, tax: true, siret: true, object: true }),
+    fields: invoiceFields(),
     defaults: commercialDefaults(null, {
-      docNumber: "FC-2026-0142",
-      object: "Mission d'accompagnement Q3 2026",
+      docNumber: "2026-090",
+      showLegal: false,
+      showTva: false,
+      showDueDate: true,
+      showObject: false,
+      showNotes: true,
+      taxRate: 20,
+      notes: "Merci pour votre confiance.",
     }),
-  },
-  {
-    id: "facture-tva",
-    name: "Facture avec TVA",
-    category: "facturation",
-    description: "Facture détaillée HT / TVA / TTC",
-    icon: "💳",
-    color: "#7A1515",
-    layout: "invoice-vat",
-    builtin: true,
-    fields: commercialFields({ numberLabel: "N° facture", due: true, tax: true, siret: true }),
-    defaults: commercialDefaults(null, { docNumber: "FT-2026-0088" }),
   },
   {
     id: "devis",
@@ -719,7 +734,35 @@ export function templatesForRole(role: Role, extras: DocTemplate[] = []) {
 }
 
 export function findTemplate(id: string, extras: DocTemplate[] = []) {
-  return extras.find((t) => t.id === id) ?? BUILTIN_TEMPLATES.find((t) => t.id === id);
+  const found = extras.find((t) => t.id === id) ?? BUILTIN_TEMPLATES.find((t) => t.id === id);
+  if (found) return found;
+  const legacy = legacyFactureTemplate(id);
+  return legacy ?? undefined;
+}
+
+const LEGACY_FACTURE_IDS = ["facture-simple", "facture-commerciale", "facture-tva"] as const;
+
+function legacyFactureLayout(id: string): DocTemplate["layout"] | null {
+  if (id === "facture-simple") return "invoice-simple";
+  if (id === "facture-commerciale") return "invoice-commercial";
+  if (id === "facture-tva") return "invoice-vat";
+  return null;
+}
+
+function legacyFactureTemplate(id: string): DocTemplate | undefined {
+  const layout = legacyFactureLayout(id);
+  if (!layout) return undefined;
+  const facture = BUILTIN_TEMPLATES.find((t) => t.id === "facture");
+  if (!facture) return undefined;
+  return { ...facture, id, layout };
+}
+
+export function normalizeTemplateId(id: string) {
+  return LEGACY_FACTURE_IDS.includes(id as (typeof LEGACY_FACTURE_IDS)[number]) ? "facture" : id;
+}
+
+export function isLegacyFactureScreen(screenId: string) {
+  return LEGACY_FACTURE_IDS.some((tid) => screenId === `doc:${tid}`);
 }
 
 export function hydrateDefaults(template: DocTemplate, user: User, currency: CurrencyCode = "EUR"): Record<string, unknown> {

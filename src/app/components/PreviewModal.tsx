@@ -39,7 +39,7 @@ export function PreviewModal({
             ) : null}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <IconAction label="PDF" color="#C0392B" onClick={() => exportPreviewPdf(exportName, previewRef.current)}>
+            <IconAction label="PDF" color="#C0392B" onClick={() => void exportPreviewPdf(exportName, previewRef.current)}>
               <File size={16} strokeWidth={1.75} />
             </IconAction>
             <IconAction label="Télécharger" color="#1C2340" onClick={() => downloadPreviewDoc(exportName, previewRef.current)}>

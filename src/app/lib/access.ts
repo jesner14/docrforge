@@ -1,6 +1,6 @@
 import type { AppScreen, Organisme, Profile, Role, User } from "./types";
 import { uid } from "./helpers";
-import { BUILTIN_TEMPLATES } from "./templates";
+import { BUILTIN_TEMPLATES, normalizeTemplateId } from "./templates";
 
 export const MODULE_ORDER: Role[] = ["facturation", "administration", "rh", "assistante"];
 
@@ -25,6 +25,7 @@ export const SCREENS: AppScreen[] = [
   { id: "assistante", label: "Assistante de direction (tout le pôle)", role: "ROLE_ASSISTANTE", kind: "module", module: "assistante" },
   ...DOCUMENT_SCREENS,
   { id: "depenses", label: "Suivi des dépenses", role: "ROLE_DEPENSES", kind: "tool" },
+  { id: "locations", label: "Suivi des locations", role: "ROLE_LOCATIONS", kind: "tool" },
   { id: "settings", label: "Paramétrage", role: "ROLE_SETTINGS", kind: "tool" },
   { id: "organismes", label: "Organismes", role: "ROLE_ORGANISMES", kind: "admin" },
   { id: "library", label: "Bibliothèque", role: "ROLE_LIBRARY", kind: "tool" },
@@ -51,12 +52,26 @@ export const SEED_ORGANISMES: Organisme[] = [
 
 const ALL_SCREEN_IDS = SCREENS.map((s) => s.id);
 
+export const DEFAULT_PROFILE_TEMPLATES: { slug: string; label: string; screenIds: string[] }[] = [
+  { slug: "facturation", label: "Facturation", screenIds: ["dashboard", "facturation", "depenses", "settings", "library", "designer", "documents"] },
+  { slug: "administration", label: "Administration", screenIds: ["dashboard", "administration", "settings", "library", "designer", "documents"] },
+  { slug: "rh", label: "RH", screenIds: ["dashboard", "rh", "settings", "library", "designer", "documents"] },
+  { slug: "assistante", label: "Assistante de direction", screenIds: ["dashboard", "assistante", "locations", "settings", "library", "designer", "documents"] },
+];
+
+export function profileIdForOrg(orgId: string, slug: string) {
+  if (orgId === ORG_SYSTEM) return `p-${slug}`;
+  return `${orgId}--${slug}`;
+}
+
 export const SEED_PROFILES: Profile[] = [
-  { id: "p-superadmin", label: "Super administrateur", screenIds: [...ALL_SCREEN_IDS] },
-  { id: "p-facturation", label: "Facturation", screenIds: ["dashboard", "facturation", "depenses", "settings", "library", "designer", "documents"] },
-  { id: "p-administration", label: "Administration", screenIds: ["dashboard", "administration", "settings", "library", "designer", "documents"] },
-  { id: "p-rh", label: "RH", screenIds: ["dashboard", "rh", "settings", "library", "designer", "documents"] },
-  { id: "p-assistante", label: "Assistante de direction", screenIds: ["dashboard", "assistante", "settings", "library", "designer", "documents"] },
+  { id: "p-superadmin", label: "Super administrateur", screenIds: [...ALL_SCREEN_IDS], organismeId: ORG_SYSTEM },
+  ...DEFAULT_PROFILE_TEMPLATES.map((t) => ({
+    id: profileIdForOrg(ORG_SYSTEM, t.slug),
+    label: t.label,
+    screenIds: t.screenIds,
+    organismeId: ORG_SYSTEM,
+  })),
 ];
 
 export const SEED_USERS: User[] = [
@@ -90,7 +105,17 @@ export function findScreen(id: string) {
 }
 
 export function profileOf(user: User, profiles: Profile[]) {
-  return profiles.find((p) => p.id === user.profileId) ?? null;
+  return (
+    profiles.find((p) => p.id === user.profileId && p.organismeId === user.organismeId) ??
+    profiles.find((p) => p.id === user.profileId) ??
+    null
+  );
+}
+
+export function profilesForOrganisme(profiles: Profile[], organismeId: string, includeSuperAdmin = false) {
+  return profiles.filter(
+    (p) => p.organismeId === organismeId && (includeSuperAdmin || p.id !== "p-superadmin")
+  );
 }
 
 export function hasScreen(profile: Profile | null, screenId: string) {
@@ -111,7 +136,12 @@ export function allowedTemplateIds(profile: Profile | null): string[] {
   for (const sid of profile.screenIds) {
     const s = findScreen(sid);
     if (!s) continue;
-    if (s.kind === "document" && s.templateId) ids.add(s.templateId);
+    if (s.kind === "document" && s.templateId) {
+      ids.add(normalizeTemplateId(s.templateId));
+    }
+    if (!s && sid.startsWith("doc:facture-")) {
+      ids.add("facture");
+    }
     if (s.kind === "module" && s.module) {
       for (const t of BUILTIN_TEMPLATES) {
         if (t.category === s.module) ids.add(t.id);
@@ -159,8 +189,8 @@ export function initialsFrom(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function newProfile(): Profile {
-  return { id: `p-${uid()}`, label: "", screenIds: ["dashboard"] };
+export function newProfile(organismeId: string): Profile {
+  return { id: `p-${uid()}`, label: "", screenIds: ["dashboard"], organismeId };
 }
 
 export function newUser(profileId: string, organismeId: string, org?: Organisme): User {

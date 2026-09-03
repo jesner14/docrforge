@@ -164,7 +164,13 @@ export function TemplateWorkspacePage({
 
   const handleExport = (fmt: ExportFormat) => {
     if (!active) return;
-    exportDocument(fmt, documentTitle(template, data), previewRef.current, template, { ...withOrganismeHeader(data, user), currency });
+    void exportDocument(
+      fmt,
+      documentTitle(template, data),
+      previewRef.current,
+      template,
+      { ...withOrganismeHeader(data, user), currency }
+    );
     onDocumentsChange(
       (orgDocs) =>
         orgDocs.map((d) =>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import type { Organisme, Profile, User } from "../lib/types";
-import { applyOrganisme, findOrganisme, initialsFrom, newUser, syncUserRole, ORG_SYSTEM } from "../lib/access";
+import { applyOrganisme, findOrganisme, initialsFrom, newUser, profileIdForOrg, profilesForOrganisme, syncUserRole, ORG_SYSTEM } from "../lib/access";
 import { inp, lbl } from "../lib/helpers";
 
 export function UsersPage({
@@ -22,7 +22,13 @@ export function UsersPage({
   const [editing, setEditing] = useState<User | null>(null);
   const [error, setError] = useState("");
   const customerOrganismes = organismes.filter((o) => o.id !== ORG_SYSTEM);
-  const assignableProfiles = profiles.filter((p) => p.id !== "p-superadmin");
+
+  const profilesForUser = (organismeId: string) => profilesForOrganisme(profiles, organismeId);
+
+  const defaultProfileForOrg = (organismeId: string) => {
+    const list = profilesForUser(organismeId);
+    return list.find((p) => p.id === profileIdForOrg(organismeId, "facturation")) ?? list[0];
+  };
 
   const save = async () => {
     if (!editing) return;
@@ -86,7 +92,7 @@ export function UsersPage({
             onClick={() => {
               setError("");
               const org = findOrganisme(organismes, defaultOrganismeId) ?? customerOrganismes[0];
-              const defaultProfile = assignableProfiles.find((p) => p.id === "p-facturation") ?? assignableProfiles[0];
+              const defaultProfile = org ? defaultProfileForOrg(org.id) : undefined;
               setEditing(newUser(defaultProfile?.id || "", org?.id || defaultOrganismeId, org ?? undefined));
             }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
@@ -214,7 +220,7 @@ export function UsersPage({
                   value={editing.profileId}
                   onChange={(e) => setEditing({ ...editing, profileId: e.target.value })}
                 >
-                  {profiles.filter((p) => p.id !== "p-superadmin").map((p) => (
+                  {profilesForUser(editing.organismeId).map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.label}
                     </option>
@@ -229,7 +235,16 @@ export function UsersPage({
                   disabled={!canPickOrganisme}
                   onChange={(e) => {
                     const org = findOrganisme(organismes, e.target.value);
-                    setEditing(org ? applyOrganisme({ ...editing, organismeId: e.target.value }, org) : { ...editing, organismeId: e.target.value });
+                    const nextOrgId = e.target.value;
+                    const nextProfile = defaultProfileForOrg(nextOrgId);
+                    setEditing(
+                      org
+                        ? applyOrganisme(
+                            { ...editing, organismeId: nextOrgId, profileId: nextProfile?.id || editing.profileId },
+                            org
+                          )
+                        : { ...editing, organismeId: nextOrgId, profileId: nextProfile?.id || editing.profileId }
+                    );
                   }}
                 >
                   {(canPickOrganisme ? customerOrganismes : customerOrganismes.filter((o) => o.id === defaultOrganismeId)).map((o) => (

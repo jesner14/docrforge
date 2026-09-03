@@ -15,10 +15,11 @@ import {
   Shield,
   Users,
 } from "lucide-react";
-import type { DocData, DocTemplate, ExpenseMonth, Organisme, Profile, SavedDocument, User, View } from "./lib/types";
+import type { DocData, DocTemplate, ExpenseMonth, Organisme, Profile, RentalMonth, SavedDocument, User, View } from "./lib/types";
 import { ROLE_META } from "./lib/users";
 import {
   findTemplate,
+  normalizeTemplateId,
   selectableModels,
   storedByUser,
   cloneAsStored,
@@ -31,6 +32,7 @@ import {
   saveCustomTemplates,
   saveDocuments,
   saveExpenseMonths,
+  saveRentalMonths,
   saveOrganismes,
   saveProfiles,
   tryRestoreSession,
@@ -50,6 +52,7 @@ import {
 import {
   sealExpiredMonths,
 } from "./lib/expenses";
+import { sealExpiredRentalMonths, rentalMonthId } from "./lib/rentals";
 import { statusColor } from "./lib/helpers";
 import { LoginPage } from "./views/LoginPage";
 import { MobileBlockedPage } from "./views/MobileBlockedPage";
@@ -58,6 +61,7 @@ import { TemplateDesigner } from "./designer/TemplateDesigner";
 import { ProfilesPage } from "./views/ProfilesPage";
 import { UsersPage } from "./views/UsersPage";
 import { ExpensesPage } from "./views/ExpensesPage";
+import { RentalsPage } from "./views/RentalsPage";
 import { TemplateWorkspacePage } from "./views/TemplateWorkspacePage";
 import { SettingsPage } from "./views/SettingsPage";
 import { OrganismesPage } from "./views/OrganismesPage";
@@ -71,6 +75,7 @@ const VIEW_SCREEN: Partial<Record<View, string>> = {
   designer: "designer",
   documents: "documents",
   depenses: "depenses",
+  locations: "locations",
   settings: "settings",
   profiles: "profiles",
   users: "users",
@@ -81,6 +86,7 @@ function defaultView(profile: Profile | null): View {
   if (profile?.id === "p-superadmin") return "organismes";
   if (hasScreen(profile, "dashboard")) return "dashboard";
   if (hasScreen(profile, "depenses")) return "depenses";
+  if (hasScreen(profile, "locations")) return "locations";
   if (hasScreen(profile, "library")) return "library";
   if (hasScreen(profile, "settings")) return "settings";
   if (hasScreen(profile, "profiles")) return "profiles";
@@ -100,6 +106,8 @@ function Workspace({
   setAllTemplates,
   allExpenseMonths,
   setAllExpenseMonths,
+  allRentalMonths,
+  setAllRentalMonths,
   onOrganismesChange,
   onProfilesChange,
   onUsersChange,
@@ -115,8 +123,10 @@ function Workspace({
   setAllTemplates: (next: DocTemplate[]) => void;
   allExpenseMonths: ExpenseMonth[];
   setAllExpenseMonths: (next: ExpenseMonth[]) => void;
+  allRentalMonths: RentalMonth[];
+  setAllRentalMonths: (next: RentalMonth[]) => void;
   onOrganismesChange: (next: OrganismesUpdater) => void | Promise<void>;
-  onProfilesChange: (p: Profile[]) => void;
+  onProfilesChange: (organismeId: string, p: Profile[]) => void;
   onUsersChange: (u: User[]) => void | Promise<void>;
   onLogout: () => void;
 }) {
@@ -127,6 +137,17 @@ function Workspace({
 
   const [view, setView] = useState<View>(() => defaultView(profile));
   const [search, setSearch] = useState("");
+  const customerOrganismes = useMemo(() => organismes.filter((o) => o.id !== ORG_SYSTEM), [organismes]);
+  const [profilesOrganismeId, setProfilesOrganismeId] = useState(
+    () => (user.organismeId !== ORG_SYSTEM ? user.organismeId : customerOrganismes[0]?.id ?? user.organismeId)
+  );
+
+  useEffect(() => {
+    if (organismes.some((o) => o.id === profilesOrganismeId)) return;
+    const fallback =
+      user.organismeId !== ORG_SYSTEM ? user.organismeId : customerOrganismes[0]?.id ?? user.organismeId;
+    if (fallback) setProfilesOrganismeId(fallback);
+  }, [organismes, customerOrganismes, profilesOrganismeId, user.organismeId]);
   const customTemplates = useMemo(
     () => allTemplates.filter((t) => belongsToOrganisme(t, user.organismeId)),
     [allTemplates, user.organismeId]
@@ -166,7 +187,7 @@ function Workspace({
   }, [profile, view]);
 
   const openTemplate = (id: string, docId?: string) => {
-    const tpl = findTemplate(id, customTemplates);
+    const tpl = findTemplate(normalizeTemplateId(id), customTemplates);
     if (!tpl) return;
     if (tpl.builtin && allowedIds.length && !allowedIds.includes(tpl.id)) return;
     if (!tpl.builtin && tpl.category && modules.length && !modules.includes(tpl.category) && tpl.ownerId !== user.id) return;
@@ -185,6 +206,10 @@ function Workspace({
   const documentsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const documentsSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingDocumentsRef = useRef<SavedDocument[] | null>(null);
+  const rentalSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rentalSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const pendingRentalsRef = useRef<RentalMonth[] | null>(null);
+  const rentalSaveSeq = useRef(0);
 
   const flushDocumentSave = useCallback(() => {
     const payload = pendingDocumentsRef.current;
@@ -245,6 +270,58 @@ function Workspace({
       });
     },
     [user.organismeId, setAllExpenseMonths]
+  );
+
+  const persistRentalMonths = useCallback(
+    (update: (orgMonths: RentalMonth[]) => RentalMonth[], options?: { immediate?: boolean }) => {
+      setAllRentalMonths((prev) => {
+        const orgId = user.organismeId;
+        const orgMonths = prev.filter((m) => !m.organismeId || m.organismeId === orgId);
+        const others = prev.filter((m) => m.organismeId && m.organismeId !== orgId);
+        const updatedOrg = update(orgMonths).map((m) => ({
+          ...m,
+          organismeId: orgId,
+          id: rentalMonthId(orgId, m.year, m.month),
+        }));
+        const next = sealExpiredRentalMonths([...updatedOrg, ...others]);
+        const toSave = next.filter((m) => m.lines.length > 0 || m.sealed);
+
+        const seq = ++rentalSaveSeq.current;
+        pendingRentalsRef.current = toSave;
+
+        const flush = () => {
+          const payload = pendingRentalsRef.current;
+          if (!payload) return;
+          pendingRentalsRef.current = null;
+          rentalSaveQueue.current = rentalSaveQueue.current
+            .then(() => saveRentalMonths(payload))
+            .then((saved) => {
+              if (seq !== rentalSaveSeq.current) return;
+              setAllRentalMonths((current) => {
+                const currentOrg = current.filter((m) => !m.organismeId || m.organismeId === orgId);
+                const newerLocal = currentOrg.some((m) => {
+                  const s = saved.find((x) => x.id === m.id || (x.year === m.year && x.month === m.month));
+                  return !s && m.lines.length > 0;
+                });
+                if (newerLocal) return current;
+                const otherOrgs = current.filter((m) => m.organismeId && m.organismeId !== orgId);
+                return [...saved.map((m) => ({ ...m, organismeId: m.organismeId || orgId })), ...otherOrgs];
+              });
+            })
+            .catch((err) => {
+              console.error(err);
+              flash("Erreur lors de l'enregistrement des locations.");
+            });
+        };
+
+        if (rentalSaveTimer.current) clearTimeout(rentalSaveTimer.current);
+        if (options?.immediate) flush();
+        else rentalSaveTimer.current = setTimeout(flush, 350);
+
+        return next;
+      });
+    },
+    [user.organismeId, setAllRentalMonths]
   );
 
   const persistTemplates = (orgTemplates: DocTemplate[]) => {
@@ -317,7 +394,7 @@ function Workspace({
             </NavBtn>
           )}
 
-          {(catalog.filter((t) => t.builtin).length > 0 || can("depenses")) && (
+          {(catalog.filter((t) => t.builtin).length > 0 || can("depenses") || can("locations")) && (
             <div className="my-2 mx-2 border-t" style={{ borderColor: "rgba(255,255,255,0.08)" }} />
           )}
 
@@ -351,6 +428,21 @@ function Workspace({
             >
               <span style={{ fontSize: "0.85rem", lineHeight: 1 }}>🧾</span>
               <span className="truncate">Suivi des dépenses</span>
+            </button>
+          )}
+
+          {can("locations") && (
+            <button
+              onClick={() => goTo("locations")}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs transition-all"
+              style={{
+                color: view === "locations" ? "#fff" : "rgba(255,255,255,0.55)",
+                background: view === "locations" ? "rgba(255,255,255,0.1)" : "transparent",
+                fontWeight: view === "locations" ? 600 : 400,
+              }}
+            >
+              <span style={{ fontSize: "0.85rem", lineHeight: 1 }}>🚗</span>
+              <span className="truncate">Suivi des locations</span>
             </button>
           )}
 
@@ -462,6 +554,10 @@ function Workspace({
             profileLabel={profile?.label || roleMeta.label}
             catalog={catalog}
             docs={myDocs}
+            canDepenses={can("depenses")}
+            onOpenDepenses={() => goTo("depenses")}
+            canLocations={can("locations")}
+            onOpenLocations={() => goTo("locations")}
             onOpenTemplate={openTemplate}
             onLibrary={() => goTo("library")}
             onDesigner={() => {
@@ -625,6 +721,14 @@ function Workspace({
           />
         )}
 
+        {view === "locations" && can("locations") && (
+          <RentalsPage
+            user={user}
+            allMonths={allRentalMonths}
+            onPersist={persistRentalMonths}
+          />
+        )}
+
         {view === "settings" && can("settings") && (
           <SettingsPage onSaved={() => flash("Paramètres enregistrés pour votre organisme.")} />
         )}
@@ -647,8 +751,12 @@ function Workspace({
         {view === "profiles" && can("profiles") && (
           <ProfilesPage
             profiles={profiles}
+            organismes={organismes}
+            organismeId={profilesOrganismeId}
+            canPickOrganisme={can("organismes")}
+            onOrganismeIdChange={setProfilesOrganismeId}
             onChange={(next) => {
-              onProfilesChange(next);
+              onProfilesChange(profilesOrganismeId, next);
               flash("Profils mis à jour.");
             }}
           />
@@ -852,6 +960,7 @@ export default function App() {
   const [allDocuments, setAllDocuments] = useState<SavedDocument[]>([]);
   const [allTemplates, setAllTemplates] = useState<DocTemplate[]>([]);
   const [allExpenseMonths, setAllExpenseMonths] = useState<ExpenseMonth[]>([]);
+  const [allRentalMonths, setAllRentalMonths] = useState<RentalMonth[]>([]);
   const [sessionUser, setSessionUser] = useState<User | null>(null);
 
   const applyBootstrap = (data: BootstrapData) => {
@@ -862,6 +971,7 @@ export default function App() {
     setAllDocuments(data.documents);
     setAllTemplates(data.templates);
     setAllExpenseMonths(data.expenseMonths);
+    setAllRentalMonths(data.rentalMonths || []);
   };
 
   useEffect(() => {
@@ -887,16 +997,24 @@ export default function App() {
     };
   }, []);
 
-  const persistProfiles = (next: Profile[]) => {
-    setProfiles(next);
-    void saveProfiles(next)
-      .then((saved) => {
-        setProfiles(saved);
-        setUsers((prev) => prev.map((u) => syncUserRole(u, saved)));
-      })
-      .catch((err) => {
-        console.error(err);
-      });
+  const persistProfiles = (organismeId: string, nextOrgProfiles: Profile[]) => {
+    setProfiles((prev) => {
+      const others = prev.filter((p) => p.organismeId !== organismeId);
+      const next = [...nextOrgProfiles.map((p) => ({ ...p, organismeId })), ...others];
+      void saveProfiles(organismeId, nextOrgProfiles)
+        .then((savedOrg) => {
+          setProfiles((current) => {
+            const rest = current.filter((p) => p.organismeId !== organismeId);
+            const merged = [...rest, ...savedOrg];
+            setUsers((prevUsers) => prevUsers.map((u) => syncUserRole(u, merged)));
+            return merged;
+          });
+        })
+        .catch((err) => {
+          console.error(err);
+        });
+      return next;
+    });
   };
 
   const persistUsers = (next: User[]): Promise<void> => {
@@ -918,8 +1036,9 @@ export default function App() {
       return resolved;
     });
     return saveOrganismes(resolved)
-      .then((saved) => {
+      .then(({ organismes: saved, profiles: freshProfiles }) => {
         setOrganismes(saved);
+        if (freshProfiles?.length) setProfiles(freshProfiles);
         setUsers((prevUsers) =>
           prevUsers.map((u) => {
             const org = saved.find((o) => o.id === u.organismeId);
@@ -982,6 +1101,8 @@ export default function App() {
         setAllTemplates={setAllTemplates}
         allExpenseMonths={allExpenseMonths}
         setAllExpenseMonths={setAllExpenseMonths}
+        allRentalMonths={allRentalMonths}
+        setAllRentalMonths={setAllRentalMonths}
         onOrganismesChange={persistOrganismes}
         onProfilesChange={persistProfiles}
         onUsersChange={persistUsers}
@@ -994,6 +1115,7 @@ export default function App() {
             setAllDocuments([]);
             setAllTemplates([]);
             setAllExpenseMonths([]);
+            setAllRentalMonths([]);
           });
         }}
       />

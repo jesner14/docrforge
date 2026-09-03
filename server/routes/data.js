@@ -2,6 +2,11 @@ import bcrypt from "bcryptjs";
 import { query } from "../db.js";
 import { isAdmin, requireAuth, rowToUser } from "../middleware/auth.js";
 import { ORG_SYSTEM } from "../seed-data.js";
+import {
+  ensureProfilesForAllOrganismes,
+  loadProfiles,
+  migrateUsersToOrgProfiles,
+} from "../profiles.js";
 
 function rowToOrganisme(row) {
   return {
@@ -12,14 +17,6 @@ function rowToOrganisme(row) {
     phone: row.phone,
     logo: row.logo,
     currency: row.currency,
-  };
-}
-
-function rowToProfile(row) {
-  return {
-    id: row.id,
-    label: row.label,
-    screenIds: row.screen_ids || [],
   };
 }
 
@@ -55,14 +52,22 @@ function rowToExpenseMonth(row) {
   };
 }
 
+function rowToRentalMonth(row) {
+  return {
+    id: row.id,
+    year: row.year,
+    month: row.month,
+    sealed: row.sealed,
+    sealedAt: row.sealed_at || undefined,
+    updatedAt: row.updated_at?.toISOString?.() || row.updated_at,
+    organismeId: row.organisme_id,
+    lines: row.lines || [],
+  };
+}
+
 async function loadOrganismes() {
   const { rows } = await query(`SELECT * FROM organismes ORDER BY name`);
   return rows.map(rowToOrganisme);
-}
-
-async function loadProfiles() {
-  const { rows } = await query(`SELECT * FROM profiles ORDER BY label`);
-  return rows.map(rowToProfile);
 }
 
 async function loadUsers(includePasswords) {
@@ -112,19 +117,33 @@ async function loadExpenseMonths(orgFilter) {
   return rows.map(rowToExpenseMonth);
 }
 
+async function loadRentalMonths(orgFilter) {
+  const params = [];
+  let sql = `SELECT * FROM rental_months`;
+  if (orgFilter) {
+    sql += ` WHERE organisme_id = $1`;
+    params.push(orgFilter);
+  }
+  sql += ` ORDER BY year DESC, month DESC`;
+  const { rows } = await query(sql, params);
+  return rows.map(rowToRentalMonth);
+}
+
 export function registerDataRoutes(app) {
   app.get("/api/bootstrap", requireAuth(), async (req, res) => {
     try {
       const admin = isAdmin(req.authUser);
       const orgFilter = admin ? null : req.authUser.organismeId;
+      const isSuperAdmin = req.authUser.profileId === "p-superadmin";
 
-      const [organismes, profiles, users, documents, templates, expenseMonths] = await Promise.all([
+      const [organismes, profiles, users, documents, templates, expenseMonths, rentalMonths] = await Promise.all([
         admin ? loadOrganismes() : loadOrganismes().then((all) => all.filter((o) => o.id === orgFilter)),
-        loadProfiles(),
+        isSuperAdmin ? loadProfiles() : loadProfiles(orgFilter),
         loadUsers(admin),
         loadDocuments(orgFilter),
         loadTemplates(orgFilter),
         loadExpenseMonths(orgFilter),
+        loadRentalMonths(orgFilter),
       ]);
 
       res.json({
@@ -135,6 +154,7 @@ export function registerDataRoutes(app) {
         documents,
         templates,
         expenseMonths,
+        rentalMonths,
       });
     } catch (err) {
       console.error(err);
@@ -173,7 +193,9 @@ export function registerDataRoutes(app) {
         );
       }
       await query("COMMIT");
-      res.json({ organismes: await loadOrganismes() });
+      await ensureProfilesForAllOrganismes();
+      await migrateUsersToOrgProfiles();
+      res.json({ organismes: await loadOrganismes(), profiles: await loadProfiles() });
     } catch (err) {
       await query("ROLLBACK").catch(() => {});
       console.error(err);
@@ -184,23 +206,54 @@ export function registerDataRoutes(app) {
   app.put("/api/profiles", requireAuth(), async (req, res) => {
     try {
       if (!isAdmin(req.authUser)) return res.status(403).json({ error: "Accès refusé." });
+      const organismeId = req.body?.organismeId;
       const profiles = req.body?.profiles || [];
+      if (!organismeId) return res.status(400).json({ error: "organismeId requis." });
+
+      const isSuperAdmin = req.authUser.profileId === "p-superadmin";
+      if (!isSuperAdmin && organismeId !== req.authUser.organismeId) {
+        return res.status(403).json({ error: "Accès refusé." });
+      }
+      if (organismeId === ORG_SYSTEM && !isSuperAdmin) {
+        return res.status(403).json({ error: "Accès refusé." });
+      }
+
+      for (const p of profiles) {
+        if (p.id === "p-superadmin" && organismeId !== ORG_SYSTEM) {
+          return res.status(400).json({ error: "Profil système invalide." });
+        }
+        if (p.organismeId && p.organismeId !== organismeId) {
+          return res.status(400).json({ error: "Profil hors organisme." });
+        }
+      }
+
       await query("BEGIN");
       const ids = profiles.map((p) => p.id);
-      if (ids.length) {
-        await query(`DELETE FROM profiles WHERE NOT (id = ANY($1::text[]))`, [ids]);
+      const keepSuperadmin = organismeId === ORG_SYSTEM ? ["p-superadmin"] : [];
+      const keepIds = [...new Set([...ids, ...keepSuperadmin])];
+
+      if (keepIds.length) {
+        await query(`DELETE FROM profiles WHERE organisme_id = $1 AND NOT (id = ANY($2::text[]))`, [
+          organismeId,
+          keepIds,
+        ]);
       } else {
-        await query(`DELETE FROM profiles`);
+        await query(`DELETE FROM profiles WHERE organisme_id = $1 AND id <> 'p-superadmin'`, [organismeId]);
       }
+
       for (const p of profiles) {
+        if (p.id === "p-superadmin" && organismeId !== ORG_SYSTEM) continue;
         await query(
-          `INSERT INTO profiles (id, label, screen_ids) VALUES ($1,$2,$3)
-           ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, screen_ids = EXCLUDED.screen_ids`,
-          [p.id, p.label, JSON.stringify(p.screenIds || [])]
+          `INSERT INTO profiles (id, label, screen_ids, organisme_id) VALUES ($1,$2,$3,$4)
+           ON CONFLICT (id) DO UPDATE SET
+             label = EXCLUDED.label,
+             screen_ids = EXCLUDED.screen_ids,
+             organisme_id = EXCLUDED.organisme_id`,
+          [p.id, p.label, JSON.stringify(p.screenIds || []), organismeId]
         );
       }
       await query("COMMIT");
-      res.json({ profiles: await loadProfiles() });
+      res.json({ profiles: await loadProfiles(organismeId) });
     } catch (err) {
       await query("ROLLBACK").catch(() => {});
       console.error(err);
@@ -392,6 +445,59 @@ export function registerDataRoutes(app) {
       }
       await query("COMMIT");
       res.json({ expenseMonths: await loadExpenseMonths(admin ? null : orgId) });
+    } catch (err) {
+      await query("ROLLBACK").catch(() => {});
+      console.error(err);
+      res.status(500).json({ error: "Enregistrement impossible." });
+    }
+  });
+
+  app.put("/api/rentals", requireAuth(), async (req, res) => {
+    try {
+      const months = req.body?.months || [];
+      const orgId = req.authUser.organismeId;
+      const admin = isAdmin(req.authUser);
+
+      // Ne jamais écraser d'autres organismes : on remplace uniquement par organisme.
+      const byOrg = new Map();
+      for (const m of months) {
+        const mOrg = admin ? m.organismeId || orgId : orgId;
+        if (!admin && mOrg !== orgId) continue;
+        if (!byOrg.has(mOrg)) byOrg.set(mOrg, []);
+        byOrg.get(mOrg).push({ ...m, organismeId: mOrg });
+      }
+      if (!admin && !byOrg.has(orgId)) byOrg.set(orgId, []);
+
+      await query("BEGIN");
+      for (const [mOrg, orgMonths] of byOrg.entries()) {
+        await query(`DELETE FROM rental_months WHERE organisme_id = $1`, [mOrg]);
+        for (const m of orgMonths) {
+          await query(
+            `INSERT INTO rental_months (id, organisme_id, year, month, sealed, sealed_at, updated_at, lines)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+             ON CONFLICT (id) DO UPDATE SET
+               organisme_id = EXCLUDED.organisme_id,
+               year = EXCLUDED.year,
+               month = EXCLUDED.month,
+               sealed = EXCLUDED.sealed,
+               sealed_at = EXCLUDED.sealed_at,
+               updated_at = EXCLUDED.updated_at,
+               lines = EXCLUDED.lines`,
+            [
+              m.id,
+              mOrg,
+              m.year,
+              m.month,
+              !!m.sealed,
+              m.sealedAt || null,
+              m.updatedAt || new Date().toISOString(),
+              JSON.stringify(m.lines || []),
+            ]
+          );
+        }
+      }
+      await query("COMMIT");
+      res.json({ rentalMonths: await loadRentalMonths(admin ? null : orgId) });
     } catch (err) {
       await query("ROLLBACK").catch(() => {});
       console.error(err);

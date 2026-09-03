@@ -10,12 +10,42 @@ import {
 import type { DocTemplate, SavedDocument, User } from "../lib/types";
 import { statusColor } from "../lib/helpers";
 
+const DEPENSES_TILE = {
+  name: "Suivi des dépenses",
+  description: "Suivi mensuel des dépenses, entrées et solde",
+  icon: "🧾",
+  color: "#1D6F42",
+};
+
+const LOCATIONS_TILE = {
+  name: "Suivi des locations",
+  description: "Locations de véhicules, encaissements et statuts",
+  icon: "🚗",
+  color: "#0B3D91",
+};
+
+type PoleItem =
+  | { kind: "template"; template: DocTemplate }
+  | { kind: "depenses" }
+  | { kind: "locations" };
+
+function poleItems(catalog: DocTemplate[], canDepenses: boolean, canLocations: boolean): PoleItem[] {
+  const items: PoleItem[] = catalog.map((template) => ({ kind: "template", template }));
+  if (canDepenses) items.push({ kind: "depenses" });
+  if (canLocations) items.push({ kind: "locations" });
+  return items;
+}
+
 export function Dashboard({
   user,
   profileLabel,
   catalog,
   docs,
   onOpenTemplate,
+  onOpenDepenses,
+  canDepenses = false,
+  onOpenLocations,
+  canLocations = false,
   onLibrary,
   onDesigner,
   onOpenDoc,
@@ -27,6 +57,10 @@ export function Dashboard({
   catalog: DocTemplate[];
   docs: SavedDocument[];
   onOpenTemplate: (id: string) => void;
+  onOpenDepenses?: () => void;
+  canDepenses?: boolean;
+  onOpenLocations?: () => void;
+  canLocations?: boolean;
   onLibrary: () => void;
   onDesigner: () => void;
   onOpenDoc: (doc: SavedDocument) => void;
@@ -39,8 +73,28 @@ export function Dashboard({
     day: "numeric",
     month: "long",
   });
-  const featured = catalog[0];
-  const rest = catalog.slice(1);
+  const items = poleItems(catalog, canDepenses, canLocations);
+  const featured = items[0];
+  const rest = items.slice(1);
+
+  const openItem = (item: PoleItem) => {
+    if (item.kind === "depenses") onOpenDepenses?.();
+    else if (item.kind === "locations") onOpenLocations?.();
+    else onOpenTemplate(item.template.id);
+  };
+
+  const itemName = (item: PoleItem) =>
+    item.kind === "depenses" ? DEPENSES_TILE.name : item.kind === "locations" ? LOCATIONS_TILE.name : item.template.name;
+  const itemDescription = (item: PoleItem) =>
+    item.kind === "depenses"
+      ? DEPENSES_TILE.description
+      : item.kind === "locations"
+        ? LOCATIONS_TILE.description
+        : item.template.description;
+  const itemIcon = (item: PoleItem) =>
+    item.kind === "depenses" ? DEPENSES_TILE.icon : item.kind === "locations" ? LOCATIONS_TILE.icon : item.template.icon;
+  const itemColor = (item: PoleItem) =>
+    item.kind === "depenses" ? DEPENSES_TILE.color : item.kind === "locations" ? LOCATIONS_TILE.color : item.template.color;
 
   return (
     <div className="h-full overflow-auto">
@@ -129,15 +183,15 @@ export function Dashboard({
 
             {featured && (
               <button
-                onClick={() => onOpenTemplate(featured.id)}
+                onClick={() => openItem(featured)}
                 className="w-full text-left rounded-2xl overflow-hidden border border-border bg-card group transition-all hover:shadow-lg hover:-translate-y-0.5"
               >
                 <div className="flex min-h-[132px]">
                   <div
                     className="w-[7.5rem] flex-shrink-0 flex flex-col items-center justify-center"
-                    style={{ background: featured.color }}
+                    style={{ background: itemColor(featured) }}
                   >
-                    <span style={{ fontSize: "2.1rem" }}>{featured.icon}</span>
+                    <span style={{ fontSize: "2.1rem" }}>{itemIcon(featured)}</span>
                     <span
                       className="mt-2 text-[10px] font-semibold uppercase tracking-widest"
                       style={{ color: "rgba(255,255,255,0.55)" }}
@@ -147,9 +201,9 @@ export function Dashboard({
                   </div>
                   <div className="flex-1 p-5 flex flex-col justify-center">
                     <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.25rem", fontWeight: 700, color: "#1C2340" }}>
-                      {featured.name}
+                      {itemName(featured)}
                     </div>
-                    <p style={{ fontSize: "0.85rem", color: "#8a8a9a", marginTop: 6, maxWidth: 420 }}>{featured.description}</p>
+                    <p style={{ fontSize: "0.85rem", color: "#8a8a9a", marginTop: 6, maxWidth: 420 }}>{itemDescription(featured)}</p>
                     <div
                       className="mt-4 inline-flex items-center gap-1 text-sm font-semibold"
                       style={{ color: "#B8923A" }}
@@ -162,22 +216,22 @@ export function Dashboard({
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {rest.map((t) => (
+              {rest.map((item) => (
                 <button
-                  key={t.id}
-                  onClick={() => onOpenTemplate(t.id)}
+                  key={item.kind === "depenses" || item.kind === "locations" ? item.kind : item.template.id}
+                  onClick={() => openItem(item)}
                   className="flex items-center gap-3.5 p-3.5 rounded-xl border border-border bg-card text-left transition-all hover:shadow-md hover:-translate-y-0.5 group"
                 >
                   <div
                     className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
-                    style={{ background: t.color }}
+                    style={{ background: itemColor(item) }}
                   >
-                    {t.icon}
+                    {itemIcon(item)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div style={{ fontWeight: 700, color: "#1C2340", fontSize: "0.9rem" }}>{t.name}</div>
+                    <div style={{ fontWeight: 700, color: "#1C2340", fontSize: "0.9rem" }}>{itemName(item)}</div>
                     <div className="truncate" style={{ fontSize: "0.75rem", color: "#9a9aa8", marginTop: 2 }}>
-                      {t.description}
+                      {itemDescription(item)}
                     </div>
                   </div>
                   <ArrowRight size={14} className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "#B8923A" }} />
@@ -219,7 +273,7 @@ export function Dashboard({
                       Modèles
                     </span>
                   </div>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "1.45rem", color: "#1C2340" }}>{catalog.length}</div>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "1.45rem", color: "#1C2340" }}>{items.length}</div>
                 </div>
               </div>
               <p className="mt-3 text-xs leading-relaxed" style={{ color: "#9a9aa8" }}>
@@ -250,11 +304,11 @@ export function Dashboard({
                   </p>
                   {featured && (
                     <button
-                      onClick={() => onOpenTemplate(featured.id)}
+                      onClick={() => openItem(featured)}
                       className="mt-4 text-xs font-semibold px-3 py-2 rounded-lg"
                       style={{ background: "#1C2340", color: "#fff" }}
                     >
-                      Créer « {featured.name} »
+                      Créer « {itemName(featured)} »
                     </button>
                   )}
                 </div>

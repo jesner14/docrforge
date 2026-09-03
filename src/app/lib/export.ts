@@ -1,6 +1,9 @@
 import type { DocTemplate, ExportFormat } from "./types";
 import { asNumber, asRows, asString } from "./helpers";
 
+/** Largeur A4 à 96 dpi — correspond à 210 mm. */
+const A4_WIDTH_PX = 794;
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -12,79 +15,149 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function documentMarkup(bodyHtml: string) {
-  const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-    .map((el) => el.outerHTML)
-    .join("\n");
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <title></title>
-  ${styles}
-  <style>
-    @page {
-      size: A4;
-      margin: 0;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #fff !important;
-      color: #1C2340;
-    }
-    body { padding: 14mm; }
-    @media print {
-      html, body { background: #fff !important; }
-      body {
-        padding: 14mm;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-    }
-  </style>
-</head>
-<body>${bodyHtml}</body>
-</html>`;
+function safeFilename(title: string) {
+  return title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "document";
 }
 
-function printAsPdf(_title: string, previewEl: HTMLElement | null) {
-  const bodyHtml = previewEl?.innerHTML?.trim() || "<p>Aucun aperçu à exporter.</p>";
-  const html = documentMarkup(bodyHtml);
+function copyComputedStyle(source: HTMLElement, target: HTMLElement) {
+  const computed = window.getComputedStyle(source);
+  for (const key of computed) {
+    target.style.setProperty(key, computed.getPropertyValue(key), computed.getPropertyPriority(key));
+  }
+}
 
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("title", " ");
-  iframe.style.cssText =
-    "position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;background:#fff;";
-  document.body.appendChild(iframe);
+/** Copie les styles calculés (RGB) depuis le DOM visible — html2canvas ne gère pas oklab/oklch de Tailwind v4. */
+function syncInlineStyles(source: Element, target: Element) {
+  if (source instanceof HTMLElement && target instanceof HTMLElement) {
+    copyComputedStyle(source, target);
+  }
+  const sourceChildren = [...source.children];
+  const targetChildren = [...target.children];
+  for (let i = 0; i < sourceChildren.length; i++) {
+    if (targetChildren[i]) syncInlineStyles(sourceChildren[i], targetChildren[i]);
+  }
+}
 
-  const doc = iframe.contentDocument;
-  const win = iframe.contentWindow;
-  if (!doc || !win) {
-    iframe.remove();
-    downloadBlob(new Blob([html], { type: "text/html;charset=utf-8" }), "document.html");
+async function waitForImages(root: HTMLElement) {
+  const imgs = [...root.querySelectorAll("img")];
+  await Promise.all(
+    imgs.map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete) {
+            resolve();
+            return;
+          }
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        })
+    )
+  );
+}
+
+function resolvePreviewPage(previewEl: HTMLElement | null): HTMLElement | null {
+  if (!previewEl) return null;
+  return (previewEl.querySelector(".doc-preview-page") as HTMLElement | null) ?? previewEl;
+}
+
+async function buildExportNode(previewEl: HTMLElement | null): Promise<{ node: HTMLElement; height: number } | null> {
+  const source = resolvePreviewPage(previewEl);
+  if (!source) return null;
+
+  await document.fonts.ready;
+
+  const clone = source.cloneNode(true) as HTMLElement;
+  syncInlineStyles(source, clone);
+
+  clone.style.width = `${A4_WIDTH_PX}px`;
+  clone.style.maxWidth = `${A4_WIDTH_PX}px`;
+  clone.style.minHeight = "auto";
+  clone.style.boxShadow = "none";
+  clone.style.borderRadius = "0";
+  clone.style.margin = "0";
+  clone.style.transform = "none";
+
+  const sourceWidth = Math.max(source.getBoundingClientRect().width, 1);
+  const scale = A4_WIDTH_PX / sourceWidth;
+  if (Math.abs(scale - 1) > 0.02) {
+    clone.style.width = `${sourceWidth}px`;
+    clone.style.maxWidth = `${sourceWidth}px`;
+    clone.style.transform = `scale(${scale})`;
+    clone.style.transformOrigin = "top left";
+  }
+
+  const host = document.createElement("div");
+  host.className = "doc-export-host";
+  host.setAttribute("aria-hidden", "true");
+  const scaledHeight = source.getBoundingClientRect().height * scale;
+  host.style.cssText = [
+    "position:fixed",
+    "left:0",
+    "top:0",
+    `width:${A4_WIDTH_PX}px`,
+    `height:${Math.ceil(scaledHeight)}px`,
+    "background:#fff",
+    "opacity:0",
+    "pointer-events:none",
+    "z-index:2147483646",
+    "overflow:visible",
+  ].join(";");
+
+  host.appendChild(clone);
+  document.body.appendChild(host);
+
+  await waitForImages(clone);
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  return { node: clone, height: Math.ceil(scaledHeight) };
+}
+
+function removeExportHost(node: HTMLElement) {
+  node.parentElement?.remove();
+}
+
+export async function exportPreviewPdf(title: string, previewEl: HTMLElement | null) {
+  const safe = safeFilename(title);
+  const built = await buildExportNode(previewEl);
+  if (!built) {
+    downloadBlob(new Blob(["Aucun aperçu à exporter."], { type: "text/plain" }), `${safe}.txt`);
     return;
   }
 
-  doc.open();
-  doc.write(html);
-  doc.close();
-  doc.title = "";
+  const { node, height } = built;
 
-  const cleanup = () => {
-    setTimeout(() => iframe.remove(), 400);
-  };
-  win.addEventListener("afterprint", cleanup);
-  win.focus();
-  win.print();
-}
-
-export function exportPreviewPdf(title: string, previewEl: HTMLElement | null) {
-  printAsPdf(title, previewEl);
+  try {
+    const html2pdf = (await import("html2pdf.js")).default;
+    await html2pdf()
+      .set({
+        margin: [8, 8, 8, 8],
+        filename: `${safe}.pdf`,
+        image: { type: "jpeg", quality: 0.96 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          width: A4_WIDTH_PX,
+          windowWidth: A4_WIDTH_PX,
+          height,
+          windowHeight: height,
+          scrollX: 0,
+          scrollY: 0,
+        },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["css", "legacy"] },
+      })
+      .from(node)
+      .save();
+  } finally {
+    removeExportHost(node);
+  }
 }
 
 export function downloadPreviewDoc(title: string, previewEl: HTMLElement | null) {
-  const safe = title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "document";
+  const safe = safeFilename(title);
   const html = previewEl?.innerHTML ?? "";
   const doc = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office"
     xmlns:w="urn:schemas-microsoft-com:office:word" lang="fr"><head><meta charset="utf-8">
@@ -100,17 +173,17 @@ function csvEscape(v: unknown) {
   return s;
 }
 
-export function exportDocument(
+export async function exportDocument(
   format: ExportFormat,
   title: string,
   previewEl: HTMLElement | null,
   template: DocTemplate,
   data: Record<string, unknown>
 ) {
-  const safe = title.replace(/[\\/:*?"<>|]+/g, " ").trim() || template.name;
+  const safe = safeFilename(title);
 
   if (format === "pdf") {
-    printAsPdf(safe, previewEl);
+    await exportPreviewPdf(safe, previewEl);
     return;
   }
 
@@ -129,7 +202,7 @@ export function exportDocument(
   const rows = tableField ? asRows(data[tableField.key]) : [];
   const cols = tableField?.columns ?? [];
   const meta = template.fields
-    .filter((f) => f.type !== "table")
+    .filter((f) => f.type !== "table" && f.type !== "checkbox")
     .map((f) => [f.label, asString(data[f.key])])
     .filter(([, v]) => v);
 

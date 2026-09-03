@@ -22,8 +22,15 @@ export function ExpensePreview({
 
   return (
     <div
-      className="bg-white rounded-xl shadow-xl overflow-hidden text-sm"
-      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", borderTop: "4px solid #1C2340" }}
+      className="doc-preview-page bg-white rounded-xl shadow-xl overflow-hidden text-sm"
+      style={{
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
+        borderTop: "4px solid #1C2340",
+        width: "100%",
+        maxWidth: "210mm",
+        minHeight: "297mm",
+        margin: "0 auto",
+      }}
     >
       <div className="p-6" style={{ background: "#1C2340", color: "#fff" }}>
         <div className="flex justify-between items-start gap-3">

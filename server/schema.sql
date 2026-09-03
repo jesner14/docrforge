@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS organismes (
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
-  screen_ids JSONB NOT NULL DEFAULT '[]'::jsonb
+  screen_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  organisme_id TEXT REFERENCES organismes(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -67,3 +68,17 @@ CREATE TABLE IF NOT EXISTS expense_months (
 );
 
 CREATE INDEX IF NOT EXISTS idx_expenses_org ON expense_months(organisme_id);
+
+CREATE TABLE IF NOT EXISTS rental_months (
+  id TEXT PRIMARY KEY,
+  organisme_id TEXT NOT NULL REFERENCES organismes(id) ON DELETE CASCADE,
+  year INT NOT NULL,
+  month INT NOT NULL,
+  sealed BOOLEAN NOT NULL DEFAULT FALSE,
+  sealed_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  lines JSONB NOT NULL DEFAULT '[]'::jsonb,
+  UNIQUE (organisme_id, year, month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rentals_org ON rental_months(organisme_id);

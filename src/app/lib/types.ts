@@ -10,14 +10,16 @@ export type View =
   | "profiles"
   | "users"
   | "depenses"
+  | "locations"
   | "settings"
   | "organismes";
 
 export type ExportFormat = "pdf" | "excel" | "word";
 
-export type FieldType = "text" | "textarea" | "date" | "number" | "email" | "select" | "table";
+export type FieldType = "text" | "textarea" | "date" | "number" | "email" | "select" | "table" | "checkbox";
 
 export type LayoutKind =
+  | "invoice"
   | "invoice-simple"
   | "invoice-commercial"
   | "invoice-vat"
@@ -54,6 +56,8 @@ export interface TemplateField {
   options?: string[];
   columns?: TableColumn[];
   section?: string;
+  /** Afficher ce champ seulement si la case cochée (clé) est active. */
+  showWhen?: string;
 }
 
 export type BlockType =
@@ -118,6 +122,7 @@ export interface Profile {
   id: string;
   label: string;
   screenIds: string[];
+  organismeId: string;
 }
 
 export interface User {
@@ -175,6 +180,38 @@ export interface ExpenseMonth {
   sealed: boolean;
   sealedAt?: string;
   lines: ExpenseLine[];
+  updatedAt: string;
+  organismeId?: string;
+}
+
+export type RentalStatus = "non payé" | "partiellement payé" | "soldé";
+
+export interface RentalLine {
+  id: string;
+  numero: string;
+  date: string;
+  client: string;
+  vehicule: string;
+  immatriculation: string;
+  jours: number;
+  montantAPayer: number;
+  montantEncaisse: number;
+  livreur: string;
+  dateRemiseVehicule: string;
+  statut: RentalStatus | "";
+  modePaiement: string;
+  observation: string;
+  sealed?: boolean;
+  sealedAt?: string;
+}
+
+export interface RentalMonth {
+  id: string;
+  year: number;
+  month: number;
+  sealed: boolean;
+  sealedAt?: string;
+  lines: RentalLine[];
   updatedAt: string;
   organismeId?: string;
 }

@@ -1,15 +1,17 @@
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import type { Profile, Role } from "../lib/types";
+import type { Organisme, Profile, Role } from "../lib/types";
 import {
   DOCUMENT_SCREENS,
   MODULE_ORDER,
+  ORG_SYSTEM,
   SCREENS,
   chipLabel,
   findScreen,
   isScreenAssigned,
   newProfile,
   profileChipIds,
+  profilesForOrganisme,
 } from "../lib/access";
 import { ROLE_META } from "../lib/users";
 import { inp, lbl } from "../lib/helpers";
@@ -30,13 +32,25 @@ function poleChecked(screenIds: string[], module: Role) {
 
 export function ProfilesPage({
   profiles,
+  organismes,
+  organismeId,
+  canPickOrganisme,
+  onOrganismeIdChange,
   onChange,
 }: {
   profiles: Profile[];
+  organismes: Organisme[];
+  organismeId: string;
+  canPickOrganisme: boolean;
+  onOrganismeIdChange: (id: string) => void;
   onChange: (next: Profile[]) => void;
 }) {
   const [editing, setEditing] = useState<Profile | null>(null);
   const [filter, setFilter] = useState("");
+
+  const customerOrganismes = useMemo(() => organismes.filter((o) => o.id !== ORG_SYSTEM), [organismes]);
+  const orgProfiles = useMemo(() => profilesForOrganisme(profiles, organismeId), [profiles, organismeId]);
+  const activeOrg = organismes.find((o) => o.id === organismeId);
 
   const q = filter.trim().toLowerCase();
   const match = (label: string, role: string) =>
@@ -46,9 +60,9 @@ export function ProfilesPage({
     if (!editing) return;
     const label = editing.label.trim();
     if (!label || !editing.screenIds.length) return;
-    const clean = { ...editing, label, screenIds: unique(editing.screenIds) };
-    const exists = profiles.some((p) => p.id === clean.id);
-    onChange(exists ? profiles.map((p) => (p.id === clean.id ? clean : p)) : [clean, ...profiles]);
+    const clean = { ...editing, label, screenIds: unique(editing.screenIds), organismeId };
+    const exists = orgProfiles.some((p) => p.id === clean.id);
+    onChange(exists ? orgProfiles.map((p) => (p.id === clean.id ? clean : p)) : [clean, ...orgProfiles]);
     setEditing(null);
     setFilter("");
   };
@@ -109,20 +123,39 @@ export function ProfilesPage({
   return (
     <div className="h-full overflow-auto">
       <div className="p-8 max-w-4xl mx-auto">
-        <div className="flex items-end justify-between mb-6">
+        <div className="flex items-end justify-between mb-6 gap-4 flex-wrap">
           <div>
             <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.8rem", fontWeight: 700, color: "#1C2340" }}>
               Profils
             </h1>
             <p style={{ color: "#999", fontSize: "0.88rem", marginTop: 5 }}>
-              Le libellé (ex. Facturation) n’enferme pas les écrans : cochez n’importe quel document ou outil, y compris
-              l’Agenda dans un profil Facturation.
+              Chaque organisme dispose de ses propres profils et écrans autorisés.
             </p>
+            {canPickOrganisme ? (
+              <div className="mt-3">
+                <label className={lbl}>Organisme</label>
+                <select
+                  className={inp}
+                  value={organismeId}
+                  onChange={(e) => onOrganismeIdChange(e.target.value)}
+                >
+                  {customerOrganismes.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : activeOrg ? (
+              <p className="text-sm mt-2 font-medium" style={{ color: "#1C2340" }}>
+                {activeOrg.name}
+              </p>
+            ) : null}
           </div>
           <button
             onClick={() => {
               setFilter("");
-              setEditing(newProfile());
+              setEditing(newProfile(organismeId));
             }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
             style={{ background: "#B8923A" }}
@@ -148,49 +181,57 @@ export function ProfilesPage({
               </tr>
             </thead>
             <tbody>
-              {profiles.map((p, i) => (
-                <tr
-                  key={p.id}
-                  style={{ borderBottom: i < profiles.length - 1 ? "1px solid rgba(28,35,64,0.04)" : "none" }}
-                >
-                  <td className="px-5 py-3.5 font-semibold" style={{ color: "#1C2340" }}>
-                    {p.label}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex flex-wrap gap-1.5">
-                      {profileChipIds(p).map((id) => (
-                        <span
-                          key={id}
-                          className="text-[11px] px-2 py-0.5 rounded-full"
-                          style={{ background: "rgba(28,35,64,0.06)", color: "#555" }}
-                          title={findScreen(id)?.role}
-                        >
-                          {chipLabel(id)}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <button
-                      className="p-1.5 text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setFilter("");
-                        setEditing({ ...p, screenIds: [...p.screenIds] });
-                      }}
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    {profiles.length > 1 && (
-                      <button
-                        className="p-1.5 text-muted-foreground hover:text-destructive"
-                        onClick={() => onChange(profiles.filter((x) => x.id !== p.id))}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+              {orgProfiles.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-5 py-8 text-center text-sm" style={{ color: "#999" }}>
+                    Aucun profil pour cet organisme.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                orgProfiles.map((p, i) => (
+                  <tr
+                    key={p.id}
+                    style={{ borderBottom: i < orgProfiles.length - 1 ? "1px solid rgba(28,35,64,0.04)" : "none" }}
+                  >
+                    <td className="px-5 py-3.5 font-semibold" style={{ color: "#1C2340" }}>
+                      {p.label}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex flex-wrap gap-1.5">
+                        {profileChipIds(p).map((id) => (
+                          <span
+                            key={id}
+                            className="text-[11px] px-2 py-0.5 rounded-full"
+                            style={{ background: "rgba(28,35,64,0.06)", color: "#555" }}
+                            title={findScreen(id)?.role}
+                          >
+                            {chipLabel(id)}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <button
+                        className="p-1.5 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setFilter("");
+                          setEditing({ ...p, screenIds: [...p.screenIds] });
+                        }}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      {orgProfiles.length > 1 && (
+                        <button
+                          className="p-1.5 text-muted-foreground hover:text-destructive"
+                          onClick={() => onChange(orgProfiles.filter((x) => x.id !== p.id))}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -200,7 +241,7 @@ export function ProfilesPage({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(28,35,64,0.4)" }}>
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl max-h-[92vh] overflow-auto p-6">
             <h2 style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, color: "#1C2340", fontSize: "1.2rem" }}>
-              {profiles.some((p) => p.id === editing.id) ? "Modifier le profil" : "Nouveau profil"}
+              {orgProfiles.some((p) => p.id === editing.id) ? "Modifier le profil" : "Nouveau profil"}
             </h2>
             <p className="text-xs mt-1" style={{ color: "#888" }}>
               Composez le menu comme vous voulez : les écrans ne sont pas liés au libellé.

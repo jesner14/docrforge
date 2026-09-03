@@ -1,5 +1,18 @@
 export const ORG_SYSTEM = "org-system";
 
+/** Modèles de profils créés automatiquement pour chaque organisme. */
+export const DEFAULT_PROFILE_TEMPLATES = [
+  { slug: "facturation", label: "Facturation", screenIds: ["dashboard", "facturation", "depenses", "settings", "library", "designer", "documents"] },
+  { slug: "administration", label: "Administration", screenIds: ["dashboard", "administration", "settings", "library", "designer", "documents"] },
+  { slug: "rh", label: "RH", screenIds: ["dashboard", "rh", "settings", "library", "designer", "documents"] },
+  { slug: "assistante", label: "Assistante de direction", screenIds: ["dashboard", "assistante", "locations", "settings", "library", "designer", "documents"] },
+];
+
+export function profileIdForOrg(orgId, slug) {
+  if (orgId === ORG_SYSTEM) return `p-${slug}`;
+  return `${orgId}--${slug}`;
+}
+
 /** Organisme technique — rattachement du superadmin uniquement. */
 export const SEED_ORGANISMES = [
   {
@@ -20,6 +33,7 @@ const SUPERADMIN_SCREENS = [
   "rh",
   "assistante",
   "depenses",
+  "locations",
   "settings",
   "organismes",
   "library",
@@ -30,11 +44,13 @@ const SUPERADMIN_SCREENS = [
 ];
 
 export const SEED_PROFILES = [
-  { id: "p-superadmin", label: "Super administrateur", screenIds: SUPERADMIN_SCREENS },
-  { id: "p-facturation", label: "Facturation", screenIds: ["dashboard", "facturation", "depenses", "settings", "library", "designer", "documents"] },
-  { id: "p-administration", label: "Administration", screenIds: ["dashboard", "administration", "settings", "library", "designer", "documents"] },
-  { id: "p-rh", label: "RH", screenIds: ["dashboard", "rh", "settings", "library", "designer", "documents"] },
-  { id: "p-assistante", label: "Assistante de direction", screenIds: ["dashboard", "assistante", "settings", "library", "designer", "documents"] },
+  { id: "p-superadmin", label: "Super administrateur", screenIds: SUPERADMIN_SCREENS, organismeId: ORG_SYSTEM },
+  ...DEFAULT_PROFILE_TEMPLATES.map((t) => ({
+    id: profileIdForOrg(ORG_SYSTEM, t.slug),
+    label: t.label,
+    screenIds: t.screenIds,
+    organismeId: ORG_SYSTEM,
+  })),
 ];
 
 export const SEED_USERS = [

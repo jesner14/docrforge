@@ -1,20 +1,27 @@
 import type { ReactNode } from "react";
 import type { DesignerBlock, DocData, DocTemplate } from "../lib/types";
-import { asNumber, asRows, asString, asCurrency, currencyLabel, formatMoney, formatDateFr, interpolate } from "../lib/helpers";
+import { asNumber, asRows, asString, asBool, asCurrency, currencyLabel, formatMoney, formatDateFr, interpolate } from "../lib/helpers";
 import { useSettings } from "../lib/settings";
 
 function Sheet({ children, accent = "#1C2340" }: { children: ReactNode; accent?: string }) {
   return (
     <div
-      className="bg-white rounded-xl shadow-xl overflow-hidden text-sm"
-      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", borderTop: `4px solid ${accent}` }}
+      className="doc-preview-page bg-white rounded-xl shadow-xl overflow-hidden text-sm"
+      style={{
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
+        borderTop: `4px solid ${accent}`,
+        width: "100%",
+        maxWidth: "210mm",
+        minHeight: "297mm",
+        margin: "0 auto",
+      }}
     >
       {children}
     </div>
   );
 }
 
-function CompanyHead({ data, kicker }: { data: DocData; kicker: string }) {
+function CompanyHead({ data, kicker, showLegal = false }: { data: DocData; kicker: string; showLegal?: boolean }) {
   return (
     <div className="p-8" style={{ background: "#1C2340", color: "#fff" }}>
       <div className="flex justify-between items-start gap-4">
@@ -35,7 +42,7 @@ function CompanyHead({ data, kicker }: { data: DocData; kicker: string }) {
               <br />
               {asString(data.companyEmail)}
               {data.companyPhone ? ` · ${asString(data.companyPhone)}` : ""}
-              {data.companySiret ? (
+              {showLegal && data.companySiret ? (
                 <>
                   <br />
                   SIRET {asString(data.companySiret)}
@@ -72,10 +79,12 @@ function CompanyHead({ data, kicker }: { data: DocData; kicker: string }) {
 function LineTable({
   data,
   showTax,
+  showNotes = true,
   unitLabel = "Total",
 }: {
   data: DocData;
   showTax: boolean;
+  showNotes?: boolean;
   unitLabel?: string;
 }) {
   const items = asRows(data.items);
@@ -155,7 +164,7 @@ function LineTable({
           )}
         </div>
       </div>
-      {asString(data.notes) && (
+      {showNotes && asString(data.notes) && (
         <div className="mt-6 p-4 rounded-lg" style={{ background: "#F7F6F2", borderLeft: "3px solid #B8923A" }}>
           <div
             style={{
@@ -176,7 +185,17 @@ function LineTable({
   );
 }
 
-function ClientBand({ data, extra }: { data: DocData; extra?: ReactNode }) {
+function ClientBand({
+  data,
+  showDueDate = true,
+  showObject = true,
+  extra,
+}: {
+  data: DocData;
+  showDueDate?: boolean;
+  showObject?: boolean;
+  extra?: ReactNode;
+}) {
   return (
     <div
       className="px-8 py-4 flex justify-between items-start gap-4"
@@ -196,7 +215,7 @@ function ClientBand({ data, extra }: { data: DocData; extra?: ReactNode }) {
         <div>
           Date : <span style={{ fontFamily: "'DM Mono', monospace" }}>{formatDateFr(asString(data.date))}</span>
         </div>
-        {data.dueDate ? (
+        {showDueDate && data.dueDate ? (
           <div>
             Échéance :{" "}
             <span style={{ fontFamily: "'DM Mono', monospace", color: "#C0392B" }}>
@@ -204,7 +223,7 @@ function ClientBand({ data, extra }: { data: DocData; extra?: ReactNode }) {
             </span>
           </div>
         ) : null}
-        {data.object ? <div style={{ marginTop: 6, maxWidth: 240 }}>Objet : {asString(data.object)}</div> : null}
+        {showObject && data.object ? <div style={{ marginTop: 6, maxWidth: 240 }}>Objet : {asString(data.object)}</div> : null}
         {data.paymentMethod ? <div>Règlement : {asString(data.paymentMethod)}</div> : null}
         {data.currency ? <div>Devise : {currencyLabel(data.currency)}</div> : null}
         {extra}
@@ -213,12 +232,28 @@ function ClientBand({ data, extra }: { data: DocData; extra?: ReactNode }) {
   );
 }
 
-function Commercial({ data, title, showTax }: { data: DocData; title: string; showTax: boolean }) {
+function Commercial({
+  data,
+  title,
+  showTax,
+  showLegal = false,
+  showDueDate = true,
+  showObject = true,
+  showNotes = true,
+}: {
+  data: DocData;
+  title: string;
+  showTax: boolean;
+  showLegal?: boolean;
+  showDueDate?: boolean;
+  showObject?: boolean;
+  showNotes?: boolean;
+}) {
   return (
     <Sheet>
-      <CompanyHead data={data} kicker={title} />
-      <ClientBand data={data} />
-      <LineTable data={data} showTax={showTax} />
+      <CompanyHead data={data} kicker={title} showLegal={showLegal} />
+      <ClientBand data={data} showDueDate={showDueDate} showObject={showObject} />
+      <LineTable data={data} showTax={showTax} showNotes={showNotes} />
       <div className="px-8 py-3 text-center" style={{ background: "#1C2340", fontSize: "0.65rem", color: "rgba(255,255,255,0.3)" }}>
         {asString(data.companyName)} · {asString(data.companyAddress)}
       </div>
@@ -391,15 +426,40 @@ export function DocumentPreview({
 
   if (layout.startsWith("invoice") || layout === "quote" || layout === "purchase-order" || layout === "receipt") {
     const titles: Record<string, string> = {
+      invoice: "Facture",
       "invoice-simple": "Facture",
-      "invoice-commercial": "Facture commerciale",
+      "invoice-commercial": "Facture",
       "invoice-vat": "Facture",
       quote: "Devis",
       "purchase-order": "Bon de commande",
       receipt: "Reçu",
     };
+    if (layout === "invoice") {
+      return (
+        <Commercial
+          data={data}
+          title={titles.invoice}
+          showTax={asBool(data.showTva)}
+          showLegal={asBool(data.showLegal)}
+          showDueDate={asBool(data.showDueDate, true)}
+          showObject={asBool(data.showObject)}
+          showNotes={asBool(data.showNotes, true)}
+        />
+      );
+    }
     const showTax = layout === "invoice-vat" || layout === "invoice-commercial" || layout === "quote" || layout === "receipt";
-    return <Commercial data={data} title={titles[layout] || template.name} showTax={showTax} />;
+    const showLegal = layout === "invoice-commercial" || layout === "invoice-vat";
+    return (
+      <Commercial
+        data={data}
+        title={titles[layout] || template.name}
+        showTax={showTax}
+        showLegal={showLegal}
+        showDueDate={layout !== "purchase-order"}
+        showObject={layout === "invoice-commercial" || layout === "quote" || layout === "purchase-order"}
+        showNotes
+      />
+    );
   }
 
   if (layout === "minutes" || layout === "assistant-minutes") {

@@ -1,8 +1,9 @@
 import type { CurrencyCode } from "./helpers";
 import { uid } from "./helpers";
 import { currentYearMonth, monthKey, parseMonthKey } from "./expenses";
-import { documentTitle, hydrateDefaults, recipientOf } from "./templates";
-import type { DocTemplate, SavedDocument, User } from "./types";
+import { isOrganismeHeaderField, organismeHeaderFromUser } from "./organismeHeader";
+import { documentTitle, recipientOf } from "./templates";
+import type { DocTemplate, SavedDocument, TemplateField, User } from "./types";
 
 export function docYearMonth(doc: SavedDocument): { year: number; month: number } {
   if (doc.docYear && doc.docMonth) return { year: doc.docYear, month: doc.docMonth };
@@ -82,9 +83,25 @@ export function patchSavedDocument(doc: SavedDocument, template: DocTemplate, da
   };
 }
 
+function emptyFieldValue(field: TemplateField): unknown {
+  if (field.type === "checkbox") return false;
+  if (field.type === "table") return [];
+  if (field.type === "number") return 0;
+  if (field.type === "select") return "";
+  return "";
+}
+
 export function freshDocData(template: DocTemplate, user: User, currency: CurrencyCode, year: number, month: number) {
   const day = Math.min(new Date().getDate(), new Date(year, month, 0).getDate());
   const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  const base = hydrateDefaults(template, user, currency);
-  return { ...base, date: base.date || iso };
+  const data: Record<string, unknown> = {
+    ...organismeHeaderFromUser(user),
+    currency,
+    date: iso,
+  };
+  for (const field of template.fields ?? []) {
+    if (isOrganismeHeaderField(field.key) || field.key === "currency") continue;
+    data[field.key] = emptyFieldValue(field);
+  }
+  return data;
 }

@@ -1,6 +1,6 @@
 import { PlusCircle, Trash2 } from "lucide-react";
 import type { DocData, DocTemplate, TemplateField } from "../lib/types";
-import { asNumber, asRows, asString, CURRENCY_OPTIONS, formatMoney, inp, lbl, uid } from "../lib/helpers";
+import { asNumber, asRows, asString, asBool, CURRENCY_OPTIONS, formatMoney, inp, lbl, uid } from "../lib/helpers";
 import { visibleFormFields } from "../lib/organismeHeader";
 import { useSettings } from "../lib/settings";
 
@@ -63,7 +63,9 @@ export function DocumentForm({
     );
   };
 
-  const formFields = visibleFormFields(template.fields ?? []);
+  const formFields = visibleFormFields(template.fields ?? []).filter(
+    (f) => !f.showWhen || asBool(data[f.showWhen])
+  );
 
   return (
     <div className={sectionGap}>
@@ -129,9 +131,26 @@ export function DocumentForm({
                 );
               }
 
-              const span = field.type === "textarea" || field.key === "currency" || field.label.length > 18 ? "col-span-2" : "";
+              const span =
+                field.type === "checkbox" ||
+                field.type === "textarea" ||
+                field.key === "currency" ||
+                field.label.length > 18
+                  ? "col-span-2"
+                  : "";
               return (
                 <div key={field.key} className={span}>
+                  {field.type === "checkbox" ? (
+                    <label className="flex items-center gap-2 cursor-pointer py-1">
+                      <input
+                        type="checkbox"
+                        checked={asBool(data[field.key])}
+                        onChange={(e) => set(field.key, e.target.checked, { immediate: true })}
+                      />
+                      <span className={fieldLbl + " mb-0"}>{field.label}</span>
+                    </label>
+                  ) : (
+                    <>
                   <label className={fieldLbl}>{field.label}</label>
                   {field.key === "currency" ? (
                     <div
@@ -173,6 +192,8 @@ export function DocumentForm({
                         set(field.key, field.type === "number" ? parseFloat(e.target.value) || 0 : e.target.value)
                       }
                     />
+                  )}
+                    </>
                   )}
                 </div>
               );
