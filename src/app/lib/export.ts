@@ -130,7 +130,8 @@ export async function exportPreviewPdf(title: string, previewEl: HTMLElement | n
     const html2pdf = (await import("html2pdf.js")).default;
     await html2pdf()
       .set({
-        margin: [8, 8, 8, 8],
+        // Pas de marge PDF : le document a déjà son padding interne (évite de couper le bord droit).
+        margin: [0, 0, 0, 0],
         filename: `${safe}.pdf`,
         image: { type: "jpeg", quality: 0.96 },
         html2canvas: {

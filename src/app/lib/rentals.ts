@@ -1,4 +1,4 @@
-import type { RentalLine, RentalMonth, RentalStatus } from "./types";
+import type { ProlongementStatus, RentalLine, RentalMonth, RentalStatus } from "./types";
 import { uid } from "./helpers";
 import {
   currentYearMonth,
@@ -20,6 +20,12 @@ export {
 
 export const RENTAL_STATUSES: RentalStatus[] = ["non payé", "partiellement payé", "soldé"];
 
+export const PROLONGEMENT_STATUSES: ProlongementStatus[] = [
+  "Encaissé",
+  "Non encaissé",
+  "Partiellement encaissé",
+];
+
 export const RENTAL_PAYMENT_MODES = ["OM", "WAVE", "Espèces", "Virement", "Chèque", "Autre"];
 
 export function rentalEcart(line: Pick<RentalLine, "montantAPayer" | "montantEncaisse">) {
@@ -34,20 +40,9 @@ export function deriveRentalStatus(line: Pick<RentalLine, "montantAPayer" | "mon
   return "partiellement payé";
 }
 
-export function addDaysIso(iso: string, days: number) {
-  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return "";
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return "";
-  d.setDate(d.getDate() + Math.max(0, Math.floor(Number(days) || 0)));
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** Date de remise véhicule = date de début + nombre de jours. */
-export function computeDateRemiseVehicule(date: string, jours: number) {
-  return addDaysIso(date, jours);
+/** Date de remise de caisse (manuel), avec secours sur l’ancien champ. */
+export function resolveDateRemiseCaisse(line: Pick<RentalLine, "dateRemiseCaisse" | "dateRemiseVehicule">) {
+  return line.dateRemiseCaisse || line.dateRemiseVehicule || "";
 }
 
 export function rentalMonthId(organismeId: string | undefined, year: number, month: number) {
@@ -67,30 +62,20 @@ export function findRentalMonth(months: RentalMonth[], year: number, month: numb
 }
 
 export function emptyRentalMonth(year: number, month: number, organismeId?: string): RentalMonth {
-  const past = isPastMonth(year, month);
   return {
     id: rentalMonthId(organismeId, year, month),
     year,
     month,
-    sealed: past,
-    sealedAt: past ? new Date().toISOString() : undefined,
+    sealed: false,
     lines: [],
     updatedAt: new Date().toISOString(),
     organismeId,
   };
 }
 
+/** Ne plus clôturer automatiquement les mois passés (saisie historique autorisée). */
 export function sealExpiredRentalMonths(months: RentalMonth[]): RentalMonth[] {
-  const now = new Date().toISOString();
-  let changed = false;
-  const next = months.map((m) => {
-    if (!m.sealed && isPastMonth(m.year, m.month)) {
-      changed = true;
-      return { ...m, sealed: true, sealedAt: m.sealedAt || now };
-    }
-    return m;
-  });
-  return changed ? next : months;
+  return months;
 }
 
 export function rentalTotals(lines: RentalLine[]) {
@@ -124,15 +109,18 @@ export function newRentalLine(lines: RentalLine[]): RentalLine {
     montantAPayer: 0,
     montantEncaisse: 0,
     livreur: "",
-    dateRemiseVehicule: computeDateRemiseVehicule(date, 0),
+    dateRemiseCaisse: "",
     statut: "non payé",
+    nbProlongements: 0,
+    statutProlongement: "",
+    montantProlongementEncaisse: 0,
     modePaiement: "",
     observation: "",
     sealed: false,
   };
 }
 
-export function selectableRentalMonths(stored: RentalMonth[], span = 24) {
+export function selectableRentalMonths(stored: RentalMonth[], span = 48) {
   const now = currentYearMonth();
   const keys = new Set<string>();
   for (let i = 0; i < span; i++) {
@@ -149,7 +137,14 @@ export function selectableRentalMonths(stored: RentalMonth[], span = 24) {
 }
 
 export function statusColor(status: string) {
-  if (status === "soldé") return "#2C5F2E";
-  if (status === "partiellement payé") return "#B8923A";
+  if (status === "soldé" || status === "Encaissé") return "#2C5F2E";
+  if (status === "partiellement payé" || status === "Partiellement encaissé") return "#B8923A";
   return "#C0392B";
+}
+
+export function prolongementStatusColor(status: string) {
+  if (status === "Encaissé") return "#2C5F2E";
+  if (status === "Partiellement encaissé") return "#B8923A";
+  if (status === "Non encaissé") return "#C0392B";
+  return "#888";
 }

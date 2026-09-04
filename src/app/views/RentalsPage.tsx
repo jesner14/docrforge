@@ -3,18 +3,19 @@ import { Car, Eye, Lock, Plus, Trash2 } from "lucide-react";
 import type { RentalLine, RentalMonth, User } from "../lib/types";
 import {
   currentYearMonth,
-  computeDateRemiseVehicule,
+  resolveDateRemiseCaisse,
   deriveRentalStatus,
   emptyRentalMonth,
   findRentalMonth,
   isFutureMonth,
-  isPastMonth,
   monthBounds,
   monthLabel,
   monthName,
   newRentalLine,
   rentalEcart,
   rentalMonthId,
+  PROLONGEMENT_STATUSES,
+  prolongementStatusColor,
   RENTAL_PAYMENT_MODES,
   RENTAL_STATUSES,
   rentalTotals,
@@ -76,16 +77,15 @@ export function RentalsPage({
   };
 
   const current = findRentalMonth(months, year, month, orgId) ?? emptyRentalMonth(year, month, orgId);
-  const past = isPastMonth(year, month);
   const future = isFutureMonth(year, month);
-  const sealed = current.sealed || past;
+  const sealed = !!current.sealed;
   const locked = sealed || future;
   const totals = rentalTotals(current.lines);
   const bounds = monthBounds(year, month);
   const choices = useMemo(() => selectableRentalMonths(months), [months]);
   const years = useMemo(() => {
     const set = new Set<number>();
-    for (let y = now.year; y >= now.year - 6; y--) set.add(y);
+    for (let y = now.year + 1; y >= now.year - 5; y--) set.add(y);
     months.forEach((m) => set.add(m.year));
     return [...set].sort((a, b) => b - a);
   }, [months, now.year]);
@@ -107,9 +107,6 @@ export function RentalsPage({
         const next = { ...l, ...patch };
         if ("montantAPayer" in patch || "montantEncaisse" in patch) {
           next.statut = deriveRentalStatus(next);
-        }
-        if ("date" in patch || "jours" in patch) {
-          next.dateRemiseVehicule = computeDateRemiseVehicule(next.date, next.jours);
         }
         return next;
       }),
@@ -154,6 +151,19 @@ export function RentalsPage({
         lines: cur.lines.map((l) =>
           l.sealed ? l : { ...l, sealed: true, sealedAt: new Date().toISOString() }
         ),
+      }),
+      { immediate: true }
+    );
+  };
+
+  const unsealMonth = () => {
+    if (!sealed || future) return;
+    if (!confirm(`Rouvrir ${monthLabel(year, month)} pour saisie ? Les lignes déjà clôturées individuellement resteront verrouillées.`)) return;
+    upsertMonth(
+      (cur) => ({
+        ...cur,
+        sealed: false,
+        sealedAt: undefined,
       }),
       { immediate: true }
     );
@@ -229,6 +239,16 @@ export function RentalsPage({
                 )}
               </>
             )}
+            {sealed && !future && (
+              <button
+                onClick={unsealMonth}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] border border-border"
+                style={{ color: "#1C2340" }}
+              >
+                <Car size={11} />
+                Rouvrir le mois
+              </button>
+            )}
             <button
               onClick={() => setShowPreview(true)}
               className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] border border-border"
@@ -252,7 +272,7 @@ export function RentalsPage({
       <div className="flex-1 min-h-0 px-4 pb-4 flex gap-3">
         <div className="flex-1 min-w-0 min-h-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
           <div className="flex-1 min-h-0 overflow-auto">
-            <table className="w-full" style={{ minWidth: 1220, borderCollapse: "collapse" }}>
+            <table className="w-full" style={{ minWidth: 1480, borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(28,35,64,0.08)", background: "#F7F6F2" }}>
                   {[
@@ -265,9 +285,12 @@ export function RentalsPage({
                     "À payer",
                     "Encaissé",
                     "Livreur",
-                    "Date remise véhicule",
+                    "Date remise caisse",
                     "Écart",
-                    "Statut",
+                    "Statut location",
+                    "Nb prolongements",
+                    "Statut prolongement",
+                    "Montant prolongement encaissé",
                     "Paiement",
                     "Observation",
                     "Actions",
@@ -281,7 +304,7 @@ export function RentalsPage({
               <tbody>
                 {current.lines.length === 0 ? (
                   <tr>
-                    <td colSpan={15} className="px-4 py-10 text-center text-[11px]" style={{ color: "#999" }}>
+                    <td colSpan={18} className="px-4 py-10 text-center text-[11px]" style={{ color: "#999" }}>
                       Aucune location ce mois. Cliquez sur « Location » pour ajouter une ligne.
                     </td>
                   </tr>
@@ -328,10 +351,10 @@ export function RentalsPage({
                           <input
                             className={cellInp}
                             type="date"
-                            value={line.dateRemiseVehicule || computeDateRemiseVehicule(line.date, line.jours)}
-                            disabled
-                            title="Calculée automatiquement : date + nombre de jours"
-                            style={{ color: "#555", background: "rgba(28,35,64,0.03)" }}
+                            value={resolveDateRemiseCaisse(line)}
+                            disabled={lineLocked}
+                            onChange={(e) => updateLine(line.id, { dateRemiseCaisse: e.target.value })}
+                            title="Date de remise de caisse"
                           />
                         </td>
                         <td className={td}>
@@ -353,6 +376,48 @@ export function RentalsPage({
                               </option>
                             ))}
                           </select>
+                        </td>
+                        <td className={td}>
+                          <input
+                            className={cellInp + " text-right"}
+                            type="number"
+                            min={0}
+                            value={line.nbProlongements || ""}
+                            disabled={lineLocked}
+                            onChange={(e) => updateLine(line.id, { nbProlongements: parseFloat(e.target.value) || 0 })}
+                          />
+                        </td>
+                        <td className={td}>
+                          <select
+                            className={cellInp}
+                            value={line.statutProlongement || ""}
+                            disabled={lineLocked}
+                            onChange={(e) =>
+                              updateLine(line.id, {
+                                statutProlongement: e.target.value as RentalLine["statutProlongement"],
+                              })
+                            }
+                            style={{ color: prolongementStatusColor(line.statutProlongement || "") }}
+                          >
+                            <option value="">—</option>
+                            {PROLONGEMENT_STATUSES.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className={td}>
+                          <input
+                            className={cellInp + " text-right"}
+                            type="number"
+                            min={0}
+                            value={line.montantProlongementEncaisse || ""}
+                            disabled={lineLocked}
+                            onChange={(e) =>
+                              updateLine(line.id, { montantProlongementEncaisse: parseFloat(e.target.value) || 0 })
+                            }
+                          />
                         </td>
                         <td className={td}>
                           <select className={cellInp} value={line.modePaiement} disabled={lineLocked} onChange={(e) => updateLine(line.id, { modePaiement: e.target.value })}>
@@ -418,9 +483,10 @@ export function RentalsPage({
             </div>
             <div className="flex-1 min-h-0 overflow-auto space-y-0.5">
               {choices.map((c) => {
-                const count = months.find((m) => m.year === c.year && m.month === c.month)?.lines.length ?? 0;
+                const rec = months.find((m) => m.year === c.year && m.month === c.month);
+                const count = rec?.lines.length ?? 0;
                 const activeMonth = c.year === year && c.month === month;
-                const pastM = isPastMonth(c.year, c.month);
+                const monthSealed = !!rec?.sealed;
                 return (
                   <button
                     key={`${c.year}-${c.month}`}
@@ -431,11 +497,11 @@ export function RentalsPage({
                     className="w-full text-left px-2 py-1.5 rounded-md"
                     style={{ background: activeMonth ? "rgba(28,35,64,0.08)" : "transparent" }}
                   >
-                    <div className="text-[11px] font-semibold truncate" style={{ color: pastM ? "#888" : "#1C2340" }}>
+                    <div className="text-[11px] font-semibold truncate" style={{ color: monthSealed ? "#888" : "#1C2340" }}>
                       {monthName(c.month)} {String(c.year).slice(2)}
                     </div>
                     <div className="text-[10px]" style={{ color: "#aaa" }}>
-                      {count} loc.
+                      {count} loc.{monthSealed ? " · clôturé" : ""}
                     </div>
                   </button>
                 );

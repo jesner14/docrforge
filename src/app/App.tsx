@@ -52,7 +52,7 @@ import {
 import {
   sealExpiredMonths,
 } from "./lib/expenses";
-import { sealExpiredRentalMonths, rentalMonthId } from "./lib/rentals";
+import { rentalMonthId } from "./lib/rentals";
 import { statusColor } from "./lib/helpers";
 import { LoginPage } from "./views/LoginPage";
 import { MobileBlockedPage } from "./views/MobileBlockedPage";
@@ -283,7 +283,7 @@ function Workspace({
           organismeId: orgId,
           id: rentalMonthId(orgId, m.year, m.month),
         }));
-        const next = sealExpiredRentalMonths([...updatedOrg, ...others]);
+        const next = [...updatedOrg, ...others];
         const toSave = next.filter((m) => m.lines.length > 0 || m.sealed);
 
         const seq = ++rentalSaveSeq.current;

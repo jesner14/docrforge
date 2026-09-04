@@ -186,6 +186,8 @@ export interface ExpenseMonth {
 
 export type RentalStatus = "non payé" | "partiellement payé" | "soldé";
 
+export type ProlongementStatus = "Encaissé" | "Non encaissé" | "Partiellement encaissé";
+
 export interface RentalLine {
   id: string;
   numero: string;
@@ -197,8 +199,13 @@ export interface RentalLine {
   montantAPayer: number;
   montantEncaisse: number;
   livreur: string;
-  dateRemiseVehicule: string;
+  dateRemiseCaisse: string;
+  /** @deprecated Ancien nom — lu en secours pour les données déjà enregistrées. */
+  dateRemiseVehicule?: string;
   statut: RentalStatus | "";
+  nbProlongements: number;
+  statutProlongement: ProlongementStatus | "";
+  montantProlongementEncaisse: number;
   modePaiement: string;
   observation: string;
   sealed?: boolean;

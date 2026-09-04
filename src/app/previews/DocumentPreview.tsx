@@ -1,12 +1,23 @@
 import type { ReactNode } from "react";
 import type { DesignerBlock, DocData, DocTemplate } from "../lib/types";
-import { asNumber, asRows, asString, asBool, asCurrency, currencyLabel, formatMoney, formatDateFr, interpolate } from "../lib/helpers";
+import {
+  asNumber,
+  asRows,
+  asString,
+  asBool,
+  asCurrency,
+  currencyLabel,
+  formatMoney,
+  formatDateFr,
+  interpolate,
+  type CurrencyCode,
+} from "../lib/helpers";
 import { useSettings } from "../lib/settings";
 
 function Sheet({ children, accent = "#1C2340" }: { children: ReactNode; accent?: string }) {
   return (
     <div
-      className="doc-preview-page bg-white rounded-xl shadow-xl overflow-hidden text-sm"
+      className="doc-preview-page bg-white rounded-xl shadow-xl text-sm"
       style={{
         fontFamily: "'Plus Jakarta Sans', sans-serif",
         borderTop: `4px solid ${accent}`,
@@ -14,6 +25,8 @@ function Sheet({ children, accent = "#1C2340" }: { children: ReactNode; accent?:
         maxWidth: "210mm",
         minHeight: "297mm",
         margin: "0 auto",
+        boxSizing: "border-box",
+        overflow: "visible",
       }}
     >
       {children}
@@ -23,9 +36,9 @@ function Sheet({ children, accent = "#1C2340" }: { children: ReactNode; accent?:
 
 function CompanyHead({ data, kicker, showLegal = false }: { data: DocData; kicker: string; showLegal?: boolean }) {
   return (
-    <div className="p-8" style={{ background: "#1C2340", color: "#fff" }}>
+    <div className="px-6 sm:px-8 py-8" style={{ background: "#1C2340", color: "#fff", boxSizing: "border-box" }}>
       <div className="flex justify-between items-start gap-4">
-        <div className="flex items-start gap-3 min-w-0">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
           {data.companyLogo ? (
             <img
               src={asString(data.companyLogo)}
@@ -34,10 +47,10 @@ function CompanyHead({ data, kicker, showLegal = false }: { data: DocData; kicke
             />
           ) : null}
           <div className="min-w-0">
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.25rem", fontWeight: 700 }}>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.25rem", fontWeight: 700, wordBreak: "break-word" }}>
               {asString(data.companyName, "Votre entreprise")}
             </div>
-            <div style={{ opacity: 0.55, fontSize: "0.75rem", marginTop: 6, lineHeight: 1.6 }}>
+            <div style={{ opacity: 0.55, fontSize: "0.75rem", marginTop: 6, lineHeight: 1.6, wordBreak: "break-word" }}>
               {asString(data.companyAddress)}
               <br />
               {asString(data.companyEmail)}
@@ -52,7 +65,7 @@ function CompanyHead({ data, kicker, showLegal = false }: { data: DocData; kicke
             </div>
           </div>
         </div>
-        <div className="text-right flex-shrink-0">
+        <div className="text-right flex-shrink-0 max-w-[42%]">
           <div style={{ fontSize: "0.6rem", opacity: 0.45, textTransform: "uppercase", letterSpacing: "0.12em" }}>
             {kicker}
             {data.currency ? ` · ${asCurrency(data.currency)}` : ""}
@@ -61,10 +74,11 @@ function CompanyHead({ data, kicker, showLegal = false }: { data: DocData; kicke
             <div
               style={{
                 fontFamily: "'DM Mono', monospace",
-                fontSize: "1.15rem",
+                fontSize: "1.05rem",
                 fontWeight: 500,
                 color: "#B8923A",
                 marginTop: 2,
+                wordBreak: "break-all",
               }}
             >
               #{asString(data.docNumber)}
@@ -94,9 +108,11 @@ function LineTable({
   const tax = showTax ? sub * (rate / 100) : 0;
   const total = sub + tax;
 
+  const colWidths = ["44%", "12%", "22%", "22%"];
+
   return (
-    <div className="px-8 py-5">
-      <table className="w-full">
+    <div className="px-6 sm:px-8 py-5" style={{ boxSizing: "border-box" }}>
+      <table className="w-full" style={{ tableLayout: "fixed", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid #1C2340" }}>
             {["Description", "Qté", "Prix unit.", unitLabel].map((h, i) => (
@@ -104,12 +120,15 @@ function LineTable({
                 key={h}
                 className="py-2"
                 style={{
+                  width: colWidths[i],
                   textAlign: i === 0 ? "left" : "right",
                   fontSize: "0.7rem",
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
                   color: "#1C2340",
                   fontWeight: 600,
+                  paddingLeft: i === 0 ? 0 : 4,
+                  paddingRight: i === 0 ? 8 : 0,
                 }}
               >
                 {h}
@@ -120,18 +139,33 @@ function LineTable({
         <tbody>
           {items.map((item, idx) => (
             <tr key={asString(item.id, String(idx))} style={{ borderBottom: "1px solid rgba(28,35,64,0.05)" }}>
-              <td className="py-2.5 pr-4" style={{ color: item.description ? "#333" : "#ccc" }}>
+              <td
+                className="py-2.5"
+                style={{ color: item.description ? "#333" : "#ccc", wordBreak: "break-word", paddingRight: 8 }}
+              >
                 {asString(item.description, "—")}
               </td>
-              <td className="py-2.5 text-right" style={{ fontFamily: "'DM Mono', monospace", color: "#555" }}>
+              <td
+                className="py-2.5 text-right"
+                style={{ fontFamily: "'DM Mono', monospace", color: "#555", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+              >
                 {asNumber(item.qty)}
               </td>
-              <td className="py-2.5 text-right" style={{ fontFamily: "'DM Mono', monospace", color: "#555" }}>
+              <td
+                className="py-2.5 text-right"
+                style={{ fontFamily: "'DM Mono', monospace", color: "#555", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+              >
                 {money(asNumber(item.unitPrice))}
               </td>
               <td
                 className="py-2.5 text-right"
-                style={{ fontFamily: "'DM Mono', monospace", fontWeight: 600, color: "#1C2340" }}
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontWeight: 600,
+                  color: "#1C2340",
+                  fontSize: "0.8rem",
+                  whiteSpace: "nowrap",
+                }}
               >
                 {money(asNumber(item.qty) * asNumber(item.unitPrice))}
               </td>
@@ -140,23 +174,33 @@ function LineTable({
         </tbody>
       </table>
       <div className="flex justify-end mt-4">
-        <div style={{ minWidth: 220 }}>
+        <div style={{ width: "100%", maxWidth: 260, minWidth: 0 }}>
           <div
-            className="flex justify-between py-1.5"
+            className="flex justify-between gap-4 py-1.5"
             style={{ fontSize: "0.82rem", color: "#777", borderTop: "1px solid rgba(28,35,64,0.08)" }}
           >
-            <span>{showTax ? "Sous-total HT" : "Total"}</span>
-            <span style={{ fontFamily: "'DM Mono', monospace" }}>{money(sub)}</span>
+            <span className="flex-shrink-0">{showTax ? "Sous-total HT" : "Total"}</span>
+            <span style={{ fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" }}>{money(sub)}</span>
           </div>
           {showTax && (
             <>
-              <div className="flex justify-between py-1.5" style={{ fontSize: "0.82rem", color: "#777" }}>
-                <span>TVA {rate}%</span>
-                <span style={{ fontFamily: "'DM Mono', monospace" }}>{money(tax)}</span>
+              <div className="flex justify-between gap-4 py-1.5" style={{ fontSize: "0.82rem", color: "#777" }}>
+                <span className="flex-shrink-0">TVA {rate}%</span>
+                <span style={{ fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" }}>{money(tax)}</span>
               </div>
-              <div className="flex justify-between py-2 mt-1" style={{ borderTop: "2px solid #1C2340" }}>
-                <span style={{ fontWeight: 700, color: "#1C2340" }}>Total TTC</span>
-                <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 700, color: "#B8923A", fontSize: "1.05rem" }}>
+              <div className="flex justify-between gap-4 py-2 mt-1" style={{ borderTop: "2px solid #1C2340" }}>
+                <span className="flex-shrink-0" style={{ fontWeight: 700, color: "#1C2340" }}>
+                  Total TTC
+                </span>
+                <span
+                  style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontWeight: 700,
+                    color: "#B8923A",
+                    fontSize: "1.05rem",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   {money(total)}
                 </span>
               </div>
@@ -198,20 +242,20 @@ function ClientBand({
 }) {
   return (
     <div
-      className="px-8 py-4 flex justify-between items-start gap-4"
-      style={{ background: "#F7F6F2", borderBottom: "1px solid rgba(28,35,64,0.06)" }}
+      className="px-6 sm:px-8 py-4 flex justify-between items-start gap-4"
+      style={{ background: "#F7F6F2", borderBottom: "1px solid rgba(28,35,64,0.06)", boxSizing: "border-box" }}
     >
-      <div>
+      <div className="min-w-0 flex-1">
         <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "#aaa", marginBottom: 4 }}>
           Destinataire
         </div>
-        <div style={{ fontWeight: 600, color: "#1C2340" }}>{asString(data.clientName, "—")}</div>
-        <div style={{ fontSize: "0.8rem", color: "#777", marginTop: 2, whiteSpace: "pre-line" }}>
+        <div style={{ fontWeight: 600, color: "#1C2340", wordBreak: "break-word" }}>{asString(data.clientName, "—")}</div>
+        <div style={{ fontSize: "0.8rem", color: "#777", marginTop: 2, whiteSpace: "pre-line", wordBreak: "break-word" }}>
           {asString(data.clientAddress)}
         </div>
-        <div style={{ fontSize: "0.8rem", color: "#777" }}>{asString(data.clientEmail)}</div>
+        <div style={{ fontSize: "0.8rem", color: "#777", wordBreak: "break-word" }}>{asString(data.clientEmail)}</div>
       </div>
-      <div className="text-right text-xs" style={{ color: "#555" }}>
+      <div className="text-right text-xs flex-shrink-0" style={{ color: "#555", maxWidth: "48%" }}>
         <div>
           Date : <span style={{ fontFamily: "'DM Mono', monospace" }}>{formatDateFr(asString(data.date))}</span>
         </div>
@@ -223,8 +267,10 @@ function ClientBand({
             </span>
           </div>
         ) : null}
-        {showObject && data.object ? <div style={{ marginTop: 6, maxWidth: 240 }}>Objet : {asString(data.object)}</div> : null}
-        {data.paymentMethod ? <div>Règlement : {asString(data.paymentMethod)}</div> : null}
+        {showObject && data.object ? (
+          <div style={{ marginTop: 6, wordBreak: "break-word" }}>Objet : {asString(data.object)}</div>
+        ) : null}
+        {data.paymentMethod ? <div style={{ wordBreak: "break-word" }}>Règlement : {asString(data.paymentMethod)}</div> : null}
         {data.currency ? <div>Devise : {currencyLabel(data.currency)}</div> : null}
         {extra}
       </div>

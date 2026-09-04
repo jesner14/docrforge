@@ -24,7 +24,7 @@ export function PreviewModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-xl shadow-2xl w-full max-w-[900px] max-h-[92vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border flex-shrink-0">

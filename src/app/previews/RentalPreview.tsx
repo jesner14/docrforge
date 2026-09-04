@@ -1,5 +1,5 @@
 import type { RentalLine, User } from "../lib/types";
-import { deriveRentalStatus, computeDateRemiseVehicule, monthLabel, rentalEcart, rentalTotals, statusColor } from "../lib/rentals";
+import { deriveRentalStatus, resolveDateRemiseCaisse, monthLabel, prolongementStatusColor, rentalEcart, rentalTotals, statusColor } from "../lib/rentals";
 import { currencyLabel, formatDateFr, formatMoney, type CurrencyCode } from "../lib/helpers";
 
 export function RentalPreview({
@@ -66,17 +66,35 @@ export function RentalPreview({
       </div>
 
       <div className="px-4 py-4 overflow-x-auto">
-        <table className="w-full" style={{ fontSize: "0.62rem" }}>
+        <table className="w-full" style={{ fontSize: "0.58rem" }}>
           <thead>
             <tr style={{ borderBottom: "2px solid #1C2340" }}>
-              {["N°", "Date", "Client", "Véhicule", "Immat.", "Jours", "À payer", "Encaissé", "Livreur", "Remise véhicule", "Écart", "Statut", "Paiement", "Obs.", "État"].map(
-                (h, i) => (
+              {[
+                "N°",
+                "Date",
+                "Client",
+                "Véhicule",
+                "Immat.",
+                "Jours",
+                "À payer",
+                "Encaissé",
+                "Livreur",
+                "Remise caisse",
+                "Écart",
+                "Stat. loc.",
+                "Nb prol.",
+                "Stat. prol.",
+                "Mt prol. enc.",
+                "Paiement",
+                "Obs.",
+                "État",
+              ].map((h, i) => (
                   <th
                     key={h}
                     className="py-1.5 px-1"
                     style={{
-                      textAlign: i >= 5 && i <= 10 ? "right" : "left",
-                      fontSize: "0.52rem",
+                      textAlign: [5, 6, 7, 10, 12, 14].includes(i) ? "right" : "left",
+                      fontSize: "0.48rem",
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
                       color: "#1C2340",
@@ -91,13 +109,14 @@ export function RentalPreview({
           <tbody>
             {lines.length === 0 ? (
               <tr>
-                <td colSpan={15} className="py-6 text-center" style={{ color: "#999" }}>
+                <td colSpan={18} className="py-6 text-center" style={{ color: "#999" }}>
                   Aucune location
                 </td>
               </tr>
             ) : (
               lines.map((line, i) => {
                 const statut = line.statut || deriveRentalStatus(line);
+                const statutProl = line.statutProlongement || "—";
                 return (
                   <tr key={line.id} style={{ background: i % 2 ? "#F7F6F2" : "#fff", borderBottom: "1px solid rgba(28,35,64,0.05)" }}>
                     <td className="py-1.5 px-1">{line.numero}</td>
@@ -116,7 +135,7 @@ export function RentalPreview({
                     </td>
                     <td className="py-1.5 px-1">{line.livreur || "—"}</td>
                     <td className="py-1.5 px-1 whitespace-nowrap">
-                      {formatDateFr(line.dateRemiseVehicule || computeDateRemiseVehicule(line.date, line.jours))}
+                      {formatDateFr(resolveDateRemiseCaisse(line))}
                     </td>
                     <td className="py-1.5 px-1 text-right font-semibold" style={{ fontFamily: "'DM Mono', monospace", color: rentalEcart(line) > 0 ? "#C0392B" : "#2C5F2E" }}>
                       {money(rentalEcart(line))}
@@ -125,6 +144,27 @@ export function RentalPreview({
                       <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold" style={{ background: statusColor(statut) + "18", color: statusColor(statut) }}>
                         {statut}
                       </span>
+                    </td>
+                    <td className="py-1.5 px-1 text-right" style={{ fontFamily: "'DM Mono', monospace" }}>
+                      {line.nbProlongements || 0}
+                    </td>
+                    <td className="py-1.5 px-1">
+                      {line.statutProlongement ? (
+                        <span
+                          className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold"
+                          style={{
+                            background: prolongementStatusColor(line.statutProlongement) + "18",
+                            color: prolongementStatusColor(line.statutProlongement),
+                          }}
+                        >
+                          {statutProl}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="py-1.5 px-1 text-right" style={{ fontFamily: "'DM Mono', monospace" }}>
+                      {money(line.montantProlongementEncaisse || 0)}
                     </td>
                     <td className="py-1.5 px-1">{line.modePaiement || "—"}</td>
                     <td className="py-1.5 px-1">{line.observation || "—"}</td>
