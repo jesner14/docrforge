@@ -49,9 +49,7 @@ import {
   profileOf,
   syncUserRole,
 } from "./lib/access";
-import {
-  sealExpiredMonths,
-} from "./lib/expenses";
+import { expenseMonthId } from "./lib/expenses";
 import { rentalMonthId } from "./lib/rentals";
 import { statusColor } from "./lib/helpers";
 import { LoginPage } from "./views/LoginPage";
@@ -210,6 +208,10 @@ function Workspace({
   const rentalSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingRentalsRef = useRef<RentalMonth[] | null>(null);
   const rentalSaveSeq = useRef(0);
+  const expenseSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const expenseSaveSeq = useRef(0);
+  const allExpenseMonthsRef = useRef(allExpenseMonths);
+  allExpenseMonthsRef.current = allExpenseMonths;
 
   const flushDocumentSave = useCallback(() => {
     const payload = pendingDocumentsRef.current;
@@ -250,27 +252,61 @@ function Workspace({
     [user.organismeId, setAllDocuments, flushDocumentSave]
   );
 
+  /** Mise à jour locale uniquement — la base n’est touchée que via saveExpenseMonthsNow. */
   const persistExpenseMonths = useCallback(
     (update: (orgMonths: ExpenseMonth[]) => ExpenseMonth[]) => {
       setAllExpenseMonths((prev) => {
         const orgId = user.organismeId;
         const orgMonths = prev.filter((m) => !m.organismeId || m.organismeId === orgId);
         const others = prev.filter((m) => m.organismeId && m.organismeId !== orgId);
-        const updatedOrg = update(orgMonths).map((m) => ({ ...m, organismeId: orgId }));
-        const next = sealExpiredMonths([...updatedOrg, ...others]).filter(
-          (m) => m.lines.length > 0 || m.sealed
-        );
-        void saveExpenseMonths(next)
-          .then((saved) => setAllExpenseMonths(saved))
-          .catch((err) => {
-            console.error(err);
-            flash("Erreur lors de l'enregistrement des dépenses.");
-          });
+        const updatedOrg = update(orgMonths).map((m) => ({
+          ...m,
+          organismeId: orgId,
+          id: expenseMonthId(orgId, m.year, m.month),
+        }));
+        const next = [...updatedOrg, ...others];
+        allExpenseMonthsRef.current = next;
         return next;
       });
     },
     [user.organismeId, setAllExpenseMonths]
   );
+
+  /** Persiste en base toutes les lignes de dépenses de l’organisme courant. */
+  const saveExpenseMonthsNow = useCallback(() => {
+    const orgId = user.organismeId;
+    const prev = allExpenseMonthsRef.current;
+    const orgMonths = prev
+      .filter((m) => !m.organismeId || m.organismeId === orgId)
+      .map((m) => ({
+        ...m,
+        organismeId: orgId,
+        id: expenseMonthId(orgId, m.year, m.month),
+      }));
+    const toSave = orgMonths.filter((m) => m.lines.length > 0 || m.sealed);
+    const seq = ++expenseSaveSeq.current;
+
+    const job = expenseSaveQueue.current
+      .then(() => saveExpenseMonths(toSave))
+      .then((saved) => {
+        if (seq !== expenseSaveSeq.current) return;
+        setAllExpenseMonths((current) => {
+          const otherOrgs = current.filter((m) => m.organismeId && m.organismeId !== orgId);
+          const next = [...saved.map((m) => ({ ...m, organismeId: m.organismeId || orgId })), ...otherOrgs];
+          allExpenseMonthsRef.current = next;
+          return next;
+        });
+        flash("Dépenses enregistrées.");
+      })
+      .catch((err) => {
+        console.error(err);
+        flash("Erreur lors de l'enregistrement des dépenses.");
+        throw err;
+      });
+
+    expenseSaveQueue.current = job.catch(() => {});
+    return job;
+  }, [user.organismeId, setAllExpenseMonths]);
 
   const persistRentalMonths = useCallback(
     (update: (orgMonths: RentalMonth[]) => RentalMonth[], options?: { immediate?: boolean }) => {
@@ -718,6 +754,7 @@ function Workspace({
             user={user}
             allMonths={allExpenseMonths}
             onPersist={persistExpenseMonths}
+            onSave={saveExpenseMonthsNow}
           />
         )}
 

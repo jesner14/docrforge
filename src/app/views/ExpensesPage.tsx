@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Download, Eye, File, Lock, Plus, Trash2, Wallet, X } from "lucide-react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { Download, Eye, File, Lock, Plus, Save, Trash2, Wallet, X } from "lucide-react";
 import type { ExpenseLine, ExpenseMonth, User } from "../lib/types";
 import {
   currentYearMonth,
   emptyMonth,
+  expenseMonthId,
   expenseTotals,
+  findExpenseMonth,
   isFutureMonth,
-  isPastMonth,
   monthBounds,
-  monthKey,
   monthLabel,
   monthName,
   newExpenseLine,
@@ -26,15 +26,19 @@ export function ExpensesPage({
   user,
   allMonths,
   onPersist,
+  onSave,
 }: {
   user: User;
   allMonths: ExpenseMonth[];
   onPersist: (update: (orgMonths: ExpenseMonth[]) => ExpenseMonth[]) => void;
+  onSave: () => Promise<void>;
 }) {
   const { currency } = useOrganisme();
   const money = (n: number) => formatMoney(n, currency);
   const previewRef = useRef<HTMLDivElement>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const orgId = user.organismeId;
   const months = useMemo(
@@ -45,38 +49,37 @@ export function ExpensesPage({
   const now = currentYearMonth();
   const [year, setYear] = useState(now.year);
   const [month, setMonth] = useState(now.month);
-  const key = monthKey(year, month);
 
   const upsertMonth = (build: (current: ExpenseMonth) => ExpenseMonth) => {
     onPersist((orgMonths) => {
-      const current = orgMonths.find((m) => m.id === key) ?? emptyMonth(year, month, orgId);
-      const patch = { ...build(current), updatedAt: new Date().toISOString() };
-      const rest = orgMonths.filter((m) => m.id !== patch.id);
+      const current =
+        findExpenseMonth(orgMonths, year, month, orgId) ?? emptyMonth(year, month, orgId);
+      const patch = {
+        ...build(current),
+        id: expenseMonthId(orgId, year, month),
+        year,
+        month,
+        organismeId: orgId,
+        updatedAt: new Date().toISOString(),
+      };
+      const rest = orgMonths.filter(
+        (m) => !(m.year === year && m.month === month && (!m.organismeId || m.organismeId === orgId))
+      );
       return [patch, ...rest];
     });
+    setDirty(true);
   };
 
-  const [bootstrapped, setBootstrapped] = useState(false);
-  useEffect(() => {
-    if (bootstrapped) return;
-    const monthId = monthKey(now.year, now.month);
-    if (!months.some((m) => m.id === monthId)) {
-      onPersist((orgMonths) => [emptyMonth(now.year, now.month, orgId), ...orgMonths]);
-    }
-    setBootstrapped(true);
-  }, [bootstrapped, months, now.month, now.year, onPersist, orgId]);
-
-  const current = months.find((m) => m.id === key) ?? emptyMonth(year, month, orgId);
-  const past = isPastMonth(year, month);
+  const current = findExpenseMonth(months, year, month, orgId) ?? emptyMonth(year, month, orgId);
   const future = isFutureMonth(year, month);
-  const sealed = current.sealed || past;
+  const sealed = !!current.sealed;
   const locked = sealed || future;
   const totals = expenseTotals(current.lines);
   const bounds = monthBounds(year, month);
   const choices = useMemo(() => selectableMonths(months), [months]);
   const years = useMemo(() => {
     const set = new Set<number>();
-    for (let y = now.year; y >= now.year - 6; y--) set.add(y);
+    for (let y = now.year + 1; y >= now.year - 5; y--) set.add(y);
     months.forEach((m) => set.add(m.year));
     return [...set].sort((a, b) => b - a);
   }, [months, now.year]);
@@ -100,6 +103,7 @@ export function ExpensesPage({
 
   const removeLine = (id: string) => {
     if (locked) return;
+    if (!confirm("Supprimer cette ligne ?")) return;
     upsertMonth((cur) => ({
       ...cur,
       sealed: false,
@@ -111,6 +115,25 @@ export function ExpensesPage({
     if (sealed || !current.lines.length) return;
     if (!confirm(`Clôturer le suivi de ${monthLabel(year, month)} ? Plus aucune ligne ne pourra être ajoutée ni retirée.`)) return;
     upsertMonth((cur) => ({ ...cur, sealed: true, sealedAt: new Date().toISOString() }));
+  };
+
+  const unsealMonth = () => {
+    if (!sealed || future) return;
+    if (!confirm(`Rouvrir ${monthLabel(year, month)} pour saisie ?`)) return;
+    upsertMonth((cur) => ({ ...cur, sealed: false, sealedAt: undefined }));
+  };
+
+  const saveAll = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSave();
+      setDirty(false);
+    } catch {
+      /* flash géré dans App */
+    } finally {
+      setSaving(false);
+    }
   };
 
   const th = "text-left px-1 py-1.5 font-semibold whitespace-nowrap";
@@ -137,6 +160,11 @@ export function ExpensesPage({
             <span className="text-[11px] font-medium" style={{ color: "#888" }}>
               {monthLabel(year, month)}
             </span>
+            {dirty ? (
+              <span className="text-[10px] font-semibold" style={{ color: "#B8923A" }}>
+                Modifications non enregistrées
+              </span>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <select
@@ -163,6 +191,17 @@ export function ExpensesPage({
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => void saveAll()}
+              disabled={saving || (!dirty && current.lines.length === 0 && !sealed)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-white disabled:opacity-50"
+              style={{ background: "#2C5F2E" }}
+              title="Enregistrer toutes les lignes en base"
+            >
+              <Save size={12} />
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </button>
             {!locked && (
               <>
                 <button
@@ -184,6 +223,16 @@ export function ExpensesPage({
                   </button>
                 )}
               </>
+            )}
+            {sealed && !future && (
+              <button
+                onClick={unsealMonth}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] border border-border"
+                style={{ color: "#1C2340" }}
+              >
+                <Wallet size={11} />
+                Rouvrir le mois
+              </button>
             )}
             <button
               onClick={() => setShowPreview(true)}
@@ -220,7 +269,7 @@ export function ExpensesPage({
               </colgroup>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(28,35,64,0.08)" }}>
-                  {["Item", "Libellé dépense", "Code reçu", "Date", "Entrée", "Montant", "Observation", ""].map((h) => (
+                  {["Item", "Libellé dépense", "Code reçu", "Date", "Entrée", "Sorties", "Observation", ""].map((h) => (
                     <th
                       key={h || "act"}
                       className={th}
@@ -348,9 +397,9 @@ export function ExpensesPage({
             </div>
             <div className="flex-1 min-h-0 overflow-auto space-y-0.5">
               {choices.map((c) => {
-                const rec = months.find((m) => m.id === monthKey(c.year, c.month));
+                const rec = findExpenseMonth(months, c.year, c.month, orgId);
                 const t = expenseTotals(rec?.lines || []);
-                const monthLocked = rec?.sealed || isPastMonth(c.year, c.month);
+                const monthSealed = !!rec?.sealed;
                 const active = c.year === year && c.month === month;
                 return (
                   <button
@@ -363,13 +412,14 @@ export function ExpensesPage({
                     style={{ background: active ? "rgba(28,35,64,0.08)" : "transparent" }}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] font-semibold truncate" style={{ color: "#1C2340" }}>
+                      <span className="text-[11px] font-semibold truncate" style={{ color: monthSealed ? "#888" : "#1C2340" }}>
                         {monthName(c.month)} {String(c.year).slice(2)}
                       </span>
-                      {monthLocked ? <Lock size={9} style={{ color: "#bbb" }} /> : null}
+                      {monthSealed ? <Lock size={9} style={{ color: "#bbb" }} /> : null}
                     </div>
                     <div className="text-[10px] truncate" style={{ color: "#888", fontFamily: "'DM Mono', monospace" }}>
                       {t.count} · {money(t.solde)}
+                      {monthSealed ? " · clôturé" : ""}
                     </div>
                   </button>
                 );

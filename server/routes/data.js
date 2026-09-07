@@ -405,43 +405,43 @@ export function registerDataRoutes(app) {
       const orgId = req.authUser.organismeId;
       const admin = isAdmin(req.authUser);
 
-      await query("BEGIN");
-      if (admin) {
-        const ids = months.map((m) => m.id);
-        if (ids.length) {
-          await query(`DELETE FROM expense_months WHERE NOT (id = ANY($1::text[]))`, [ids]);
-        } else {
-          await query(`DELETE FROM expense_months`);
-        }
-      } else {
-        await query(`DELETE FROM expense_months WHERE organisme_id = $1`, [orgId]);
-      }
-
+      // Ne jamais écraser d'autres organismes : on remplace uniquement par organisme.
+      const byOrg = new Map();
       for (const m of months) {
         const mOrg = admin ? m.organismeId || orgId : orgId;
         if (!admin && mOrg !== orgId) continue;
-        await query(
-          `INSERT INTO expense_months (id, organisme_id, year, month, sealed, sealed_at, updated_at, lines)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-           ON CONFLICT (id) DO UPDATE SET
-             organisme_id = EXCLUDED.organisme_id,
-             year = EXCLUDED.year,
-             month = EXCLUDED.month,
-             sealed = EXCLUDED.sealed,
-             sealed_at = EXCLUDED.sealed_at,
-             updated_at = EXCLUDED.updated_at,
-             lines = EXCLUDED.lines`,
-          [
-            m.id,
-            mOrg,
-            m.year,
-            m.month,
-            !!m.sealed,
-            m.sealedAt || null,
-            m.updatedAt || new Date().toISOString(),
-            JSON.stringify(m.lines || []),
-          ]
-        );
+        if (!byOrg.has(mOrg)) byOrg.set(mOrg, []);
+        byOrg.get(mOrg).push({ ...m, organismeId: mOrg });
+      }
+      if (!admin && !byOrg.has(orgId)) byOrg.set(orgId, []);
+
+      await query("BEGIN");
+      for (const [mOrg, orgMonths] of byOrg.entries()) {
+        await query(`DELETE FROM expense_months WHERE organisme_id = $1`, [mOrg]);
+        for (const m of orgMonths) {
+          await query(
+            `INSERT INTO expense_months (id, organisme_id, year, month, sealed, sealed_at, updated_at, lines)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+             ON CONFLICT (id) DO UPDATE SET
+               organisme_id = EXCLUDED.organisme_id,
+               year = EXCLUDED.year,
+               month = EXCLUDED.month,
+               sealed = EXCLUDED.sealed,
+               sealed_at = EXCLUDED.sealed_at,
+               updated_at = EXCLUDED.updated_at,
+               lines = EXCLUDED.lines`,
+            [
+              m.id,
+              mOrg,
+              m.year,
+              m.month,
+              !!m.sealed,
+              m.sealedAt || null,
+              m.updatedAt || new Date().toISOString(),
+              JSON.stringify(m.lines || []),
+            ]
+          );
+        }
       }
       await query("COMMIT");
       res.json({ expenseMonths: await loadExpenseMonths(admin ? null : orgId) });

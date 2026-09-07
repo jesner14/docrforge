@@ -51,31 +51,42 @@ export function monthBounds(year: number, month: number) {
   };
 }
 
+export function expenseMonthId(organismeId: string | undefined, year: number, month: number) {
+  const base = monthKey(year, month);
+  return organismeId ? `${organismeId}__${base}` : base;
+}
+
+export function findExpenseMonth(
+  months: ExpenseMonth[],
+  year: number,
+  month: number,
+  organismeId?: string
+) {
+  return (
+    months.find(
+      (m) =>
+        m.year === year &&
+        m.month === month &&
+        (!organismeId || !m.organismeId || m.organismeId === organismeId)
+    ) ?? null
+  );
+}
+
 export function emptyMonth(year: number, month: number, organismeId?: string): ExpenseMonth {
-  const past = isPastMonth(year, month);
   return {
-    id: monthKey(year, month),
+    id: expenseMonthId(organismeId, year, month),
     year,
     month,
-    sealed: past,
-    sealedAt: past ? new Date().toISOString() : undefined,
+    sealed: false,
     lines: [],
     updatedAt: new Date().toISOString(),
     organismeId,
   };
 }
 
+/** Ne plus clôturer automatiquement les mois passés (saisie / récupération historique). */
 export function sealExpiredMonths(months: ExpenseMonth[]): ExpenseMonth[] {
-  const now = new Date().toISOString();
-  let changed = false;
-  const next = months.map((m) => {
-    if (!m.sealed && isPastMonth(m.year, m.month)) {
-      changed = true;
-      return { ...m, sealed: true, sealedAt: m.sealedAt || now };
-    }
-    return m;
-  });
-  return changed ? next : months;
+  return months;
 }
 
 export function expenseTotals(lines: ExpenseLine[]) {
@@ -102,14 +113,14 @@ export function newExpenseLine(lines: ExpenseLine[]): ExpenseLine {
   };
 }
 
-export function selectableMonths(stored: ExpenseMonth[], span = 24) {
+export function selectableMonths(stored: ExpenseMonth[], span = 48) {
   const now = currentYearMonth();
   const keys = new Set<string>();
   for (let i = 0; i < span; i++) {
     const d = new Date(now.year, now.month - 1 - i, 1);
     keys.add(monthKey(d.getFullYear(), d.getMonth() + 1));
   }
-  for (const m of stored) keys.add(m.id);
+  for (const m of stored) keys.add(monthKey(m.year, m.month));
   return [...keys]
     .map(parseMonthKey)
     .sort((a, b) => b.year - a.year || b.month - a.month);

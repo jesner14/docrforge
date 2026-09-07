@@ -69,7 +69,7 @@ export function ExpensePreview({
         <table className="w-full" style={{ fontSize: "0.72rem" }}>
           <thead>
             <tr style={{ borderBottom: "2px solid #1C2340" }}>
-              {["Item", "Libellé dépense", "Code reçu", "Date", "Entrée", "Montant", "Observation"].map((h, i) => (
+              {["Item", "Libellé dépense", "Code reçu", "Date", "Entrée", "Sorties", "Observation"].map((h, i) => (
                 <th
                   key={h}
                   className="py-1.5"
