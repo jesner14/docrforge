@@ -169,8 +169,29 @@ export function RentalsPage({
     );
   };
 
-  const th = "text-left px-1 py-1.5 font-semibold whitespace-nowrap";
+  const th = "text-left px-1 py-1.5 font-semibold";
   const td = "px-1 py-0.5 align-middle";
+  const colHeaders = [
+    { label: "N°", w: 40 },
+    { label: "Date", w: 118 },
+    { label: "Client", w: 260 },
+    { label: "Véhicule", w: 160 },
+    { label: "Immatriculation", w: 130 },
+    { label: "Jours", w: 48 },
+    { label: "À payer", w: 72 },
+    { label: "Encaissé", w: 72 },
+    { label: "Livreur", w: 140 },
+    { label: "Date remise caisse", w: 122 },
+    { label: "Écart", w: 84 },
+    { label: "Statut location", w: 128 },
+    { label: "Nb prol.", w: 72 },
+    { label: "Statut prolongement", w: 165 },
+    { label: "Mt prol. encaissé", w: 110 },
+    { label: "Paiement", w: 100 },
+    { label: "Observation", w: 340 },
+    { label: "Actions", w: 110 },
+  ] as const;
+  const tableMinWidth = colHeaders.reduce((s, c) => s + c.w, 24);
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden" style={{ fontSize: 12 }}>
@@ -272,31 +293,29 @@ export function RentalsPage({
       <div className="flex-1 min-h-0 px-4 pb-4 flex gap-3">
         <div className="flex-1 min-w-0 min-h-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
           <div className="flex-1 min-h-0 overflow-auto">
-            <table className="w-full" style={{ minWidth: 1480, borderCollapse: "collapse" }}>
+            <table className="w-full" style={{ minWidth: tableMinWidth, borderCollapse: "collapse", tableLayout: "fixed" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(28,35,64,0.08)", background: "#F7F6F2" }}>
-                  {[
-                    "N°",
-                    "Date",
-                    "Client",
-                    "Véhicule",
-                    "Immatriculation",
-                    "Jours",
-                    "À payer",
-                    "Encaissé",
-                    "Livreur",
-                    "Date remise caisse",
-                    "Écart",
-                    "Statut location",
-                    "Nb prolongements",
-                    "Statut prolongement",
-                    "Montant prolongement encaissé",
-                    "Paiement",
-                    "Observation",
-                    "Actions",
-                  ].map((h) => (
-                    <th key={h || "x"} className={th} style={{ fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "#888" }}>
-                      {h}
+                  {colHeaders.map((c) => (
+                    <th
+                      key={c.label || "x"}
+                      className={th}
+                      title={c.label}
+                      style={{
+                        width: c.w,
+                        minWidth: c.w,
+                        maxWidth: c.w,
+                        fontSize: "0.58rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        color: "#888",
+                        lineHeight: 1.2,
+                        overflow: "hidden",
+                        whiteSpace: "normal",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {c.label}
                     </th>
                   ))}
                 </tr>
@@ -304,7 +323,7 @@ export function RentalsPage({
               <tbody>
                 {current.lines.length === 0 ? (
                   <tr>
-                    <td colSpan={18} className="px-4 py-10 text-center text-[11px]" style={{ color: "#999" }}>
+                    <td colSpan={colHeaders.length} className="px-4 py-10 text-center text-[11px]" style={{ color: "#999" }}>
                       Aucune location ce mois. Cliquez sur « Location » pour ajouter une ligne.
                     </td>
                   </tr>
@@ -320,36 +339,37 @@ export function RentalsPage({
                           background: line.sealed ? "rgba(28,35,64,0.03)" : "transparent",
                         }}
                       >
-                        <td className={td}>
-                          <input className={cellInp} style={{ width: 36 }} value={line.numero} disabled={lineLocked} onChange={(e) => updateLine(line.id, { numero: e.target.value })} />
+                        <td className={td} style={{ width: colHeaders[0].w }}>
+                          <input className={cellInp} style={{ width: "100%" }} value={line.numero} disabled={lineLocked} onChange={(e) => updateLine(line.id, { numero: e.target.value })} />
                         </td>
-                        <td className={td}>
-                          <input className={cellInp} type="date" min={bounds.min} max={bounds.max} value={line.date} disabled={lineLocked} onChange={(e) => updateLine(line.id, { date: e.target.value })} />
+                        <td className={td} style={{ width: colHeaders[1].w }}>
+                          <input className={cellInp} style={{ width: "100%" }} type="date" min={bounds.min} max={bounds.max} value={line.date} disabled={lineLocked} onChange={(e) => updateLine(line.id, { date: e.target.value })} />
                         </td>
-                        <td className={td}>
-                          <input className={cellInp} value={line.client} disabled={lineLocked} onChange={(e) => updateLine(line.id, { client: e.target.value })} placeholder="Client" />
+                        <td className={td} style={{ width: colHeaders[2].w }}>
+                          <input className={cellInp} style={{ width: "100%" }} value={line.client} disabled={lineLocked} onChange={(e) => updateLine(line.id, { client: e.target.value })} placeholder="Client" title={line.client || undefined} />
                         </td>
-                        <td className={td}>
-                          <input className={cellInp} value={line.vehicule} disabled={lineLocked} onChange={(e) => updateLine(line.id, { vehicule: e.target.value })} placeholder="Véhicule" />
+                        <td className={td} style={{ width: colHeaders[3].w }}>
+                          <input className={cellInp} style={{ width: "100%" }} value={line.vehicule} disabled={lineLocked} onChange={(e) => updateLine(line.id, { vehicule: e.target.value })} placeholder="Véhicule" title={line.vehicule || undefined} />
                         </td>
-                        <td className={td}>
-                          <input className={cellInp} value={line.immatriculation} disabled={lineLocked} onChange={(e) => updateLine(line.id, { immatriculation: e.target.value })} placeholder="AA-000-AA" />
+                        <td className={td} style={{ width: colHeaders[4].w }}>
+                          <input className={cellInp} style={{ width: "100%" }} value={line.immatriculation} disabled={lineLocked} onChange={(e) => updateLine(line.id, { immatriculation: e.target.value })} placeholder="AA-000-AA" />
                         </td>
-                        <td className={td}>
-                          <input className={cellInp + " text-right"} type="number" min={0} value={line.jours || ""} disabled={lineLocked} onChange={(e) => updateLine(line.id, { jours: parseFloat(e.target.value) || 0 })} />
+                        <td className={td} style={{ width: colHeaders[5].w }}>
+                          <input className={cellInp + " text-right"} style={{ width: "100%" }} type="number" min={0} value={line.jours || ""} disabled={lineLocked} onChange={(e) => updateLine(line.id, { jours: parseFloat(e.target.value) || 0 })} />
                         </td>
-                        <td className={td}>
-                          <input className={cellInp + " text-right"} type="number" min={0} value={line.montantAPayer || ""} disabled={lineLocked} onChange={(e) => updateLine(line.id, { montantAPayer: parseFloat(e.target.value) || 0 })} />
+                        <td className={td} style={{ width: colHeaders[6].w }}>
+                          <input className={cellInp + " text-right"} style={{ width: "100%" }} type="number" min={0} value={line.montantAPayer || ""} disabled={lineLocked} onChange={(e) => updateLine(line.id, { montantAPayer: parseFloat(e.target.value) || 0 })} />
                         </td>
-                        <td className={td}>
-                          <input className={cellInp + " text-right"} type="number" min={0} value={line.montantEncaisse || ""} disabled={lineLocked} onChange={(e) => updateLine(line.id, { montantEncaisse: parseFloat(e.target.value) || 0 })} />
+                        <td className={td} style={{ width: colHeaders[7].w }}>
+                          <input className={cellInp + " text-right"} style={{ width: "100%" }} type="number" min={0} value={line.montantEncaisse || ""} disabled={lineLocked} onChange={(e) => updateLine(line.id, { montantEncaisse: parseFloat(e.target.value) || 0 })} />
                         </td>
-                        <td className={td}>
-                          <input className={cellInp} value={line.livreur} disabled={lineLocked} onChange={(e) => updateLine(line.id, { livreur: e.target.value })} />
+                        <td className={td} style={{ width: colHeaders[8].w }}>
+                          <input className={cellInp} style={{ width: "100%" }} value={line.livreur} disabled={lineLocked} onChange={(e) => updateLine(line.id, { livreur: e.target.value })} title={line.livreur || undefined} />
                         </td>
-                        <td className={td}>
+                        <td className={td} style={{ width: colHeaders[9].w }}>
                           <input
                             className={cellInp}
+                            style={{ width: "100%" }}
                             type="date"
                             value={resolveDateRemiseCaisse(line)}
                             disabled={lineLocked}
@@ -357,18 +377,18 @@ export function RentalsPage({
                             title="Date de remise de caisse"
                           />
                         </td>
-                        <td className={td}>
-                          <div className="text-right px-0.5 font-semibold" style={{ fontFamily: "'DM Mono', monospace", color: ecart > 0 ? "#C0392B" : "#2C5F2E", fontSize: 11 }}>
+                        <td className={td} style={{ width: colHeaders[10].w }}>
+                          <div className="text-right px-0.5 font-semibold truncate" style={{ fontFamily: "'DM Mono', monospace", color: ecart > 0 ? "#C0392B" : "#2C5F2E", fontSize: 11 }} title={money(ecart)}>
                             {money(ecart)}
                           </div>
                         </td>
-                        <td className={td}>
+                        <td className={td} style={{ width: colHeaders[11].w }}>
                           <select
                             className={cellInp}
                             value={line.statut || deriveRentalStatus(line)}
                             disabled={lineLocked}
                             onChange={(e) => updateLine(line.id, { statut: e.target.value as RentalLine["statut"] })}
-                            style={{ color: statusColor(line.statut || deriveRentalStatus(line)) }}
+                            style={{ width: "100%", color: statusColor(line.statut || deriveRentalStatus(line)) }}
                           >
                             {RENTAL_STATUSES.map((s) => (
                               <option key={s} value={s}>
@@ -377,9 +397,10 @@ export function RentalsPage({
                             ))}
                           </select>
                         </td>
-                        <td className={td}>
+                        <td className={td} style={{ width: colHeaders[12].w }}>
                           <input
                             className={cellInp + " text-right"}
+                            style={{ width: "100%" }}
                             type="number"
                             min={0}
                             value={line.nbProlongements || ""}
@@ -387,7 +408,7 @@ export function RentalsPage({
                             onChange={(e) => updateLine(line.id, { nbProlongements: parseFloat(e.target.value) || 0 })}
                           />
                         </td>
-                        <td className={td}>
+                        <td className={td} style={{ width: colHeaders[13].w }}>
                           <select
                             className={cellInp}
                             value={line.statutProlongement || ""}
@@ -397,7 +418,7 @@ export function RentalsPage({
                                 statutProlongement: e.target.value as RentalLine["statutProlongement"],
                               })
                             }
-                            style={{ color: prolongementStatusColor(line.statutProlongement || "") }}
+                            style={{ width: "100%", color: prolongementStatusColor(line.statutProlongement || "") }}
                           >
                             <option value="">—</option>
                             {PROLONGEMENT_STATUSES.map((s) => (
@@ -407,9 +428,10 @@ export function RentalsPage({
                             ))}
                           </select>
                         </td>
-                        <td className={td}>
+                        <td className={td} style={{ width: colHeaders[14].w }}>
                           <input
                             className={cellInp + " text-right"}
+                            style={{ width: "100%" }}
                             type="number"
                             min={0}
                             value={line.montantProlongementEncaisse || ""}
@@ -419,8 +441,8 @@ export function RentalsPage({
                             }
                           />
                         </td>
-                        <td className={td}>
-                          <select className={cellInp} value={line.modePaiement} disabled={lineLocked} onChange={(e) => updateLine(line.id, { modePaiement: e.target.value })}>
+                        <td className={td} style={{ width: colHeaders[15].w }}>
+                          <select className={cellInp} style={{ width: "100%" }} value={line.modePaiement} disabled={lineLocked} onChange={(e) => updateLine(line.id, { modePaiement: e.target.value })}>
                             <option value="">—</option>
                             {RENTAL_PAYMENT_MODES.map((m) => (
                               <option key={m} value={m}>
@@ -429,10 +451,18 @@ export function RentalsPage({
                             ))}
                           </select>
                         </td>
-                        <td className={td}>
-                          <input className={cellInp} value={line.observation} disabled={lineLocked} onChange={(e) => updateLine(line.id, { observation: e.target.value })} />
+                        <td className={td} style={{ width: colHeaders[16].w }}>
+                          <input
+                            className={cellInp}
+                            style={{ width: "100%" }}
+                            value={line.observation}
+                            disabled={lineLocked}
+                            onChange={(e) => updateLine(line.id, { observation: e.target.value })}
+                            title={line.observation || undefined}
+                            placeholder="Observation"
+                          />
                         </td>
-                        <td className={td}>
+                        <td className={td} style={{ width: colHeaders[17].w }}>
                           <div className="flex items-center gap-1 whitespace-nowrap">
                             {line.sealed ? (
                               <span
