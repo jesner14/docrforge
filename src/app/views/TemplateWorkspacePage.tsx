@@ -57,8 +57,10 @@ export function TemplateWorkspacePage({
   const [data, setData] = useState<DocData>({});
   const [showPreview, setShowPreview] = useState(false);
   const [exported, setExported] = useState<ExportFormat | null>(null);
+  const [savedOk, setSavedOk] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedOkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeIdRef = useRef<string | null>(null);
   const dataRef = useRef<DocData>({});
 
@@ -141,7 +143,19 @@ export function TemplateWorkspacePage({
     if (active) setData(withOrganismeHeader(active.data, user));
     else setData({});
     // eslint-disable-next-line react-hooks/exhaustive-deps -- resync header when org identity changes
-  }, [active?.id, user.company, user.companyAddress, user.companyEmail, user.companyPhone, user.companyLogo]);
+  }, [
+    active?.id,
+    user.company,
+    user.companyAddress,
+    user.companyEmail,
+    user.companyPhone,
+    user.companyLogo,
+    user.companyNinea,
+    user.companyRc,
+    user.companyRib,
+    user.companyWebsite,
+    user.companySlogan,
+  ]);
 
   const scheduleSave = (nextData: DocData, opts?: DocFormChangeOptions) => {
     commitSave(nextData, !!opts?.immediate);
@@ -183,6 +197,33 @@ export function TemplateWorkspacePage({
     setExported(fmt);
     setTimeout(() => setExported(null), 2800);
   };
+
+  const handleSave = () => {
+    if (!active) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const merged = withOrganismeHeader(dataRef.current, user);
+    setData(merged);
+    dataRef.current = merged;
+    onDocumentsChange(
+      (orgDocs) =>
+        orgDocs.map((d) =>
+          d.id === active.id
+            ? { ...patchSavedDocument(d, template, merged), status: "Enregistré" }
+            : d
+        ),
+      { immediate: true }
+    );
+    setSavedOk(true);
+    if (savedOkTimer.current) clearTimeout(savedOkTimer.current);
+    savedOkTimer.current = setTimeout(() => setSavedOk(false), 2500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (savedOkTimer.current) clearTimeout(savedOkTimer.current);
+    };
+  }, []);
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden" style={{ fontSize: 12 }}>
@@ -241,6 +282,15 @@ export function TemplateWorkspacePage({
               <Plus size={12} />
               Nouveau
             </button>
+            <button
+              onClick={handleSave}
+              disabled={!active}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-white disabled:opacity-40"
+              style={{ background: savedOk ? "#2C5F2E" : "#1C2340" }}
+            >
+              {savedOk ? <CheckCircle2 size={12} /> : <Save size={12} />}
+              {savedOk ? "Enregistré" : "Enregistrer"}
+            </button>
             {onSaveAsTemplate && active && (
               <button
                 onClick={() => onSaveAsTemplate(data)}
@@ -297,7 +347,7 @@ export function TemplateWorkspacePage({
                 {monthDocs.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-3 py-4 text-center text-[11px]" style={{ color: "#999" }}>
-                      Aucun document pour ce mois. Cliquez sur « Nouveau » pour en créer un — l’enregistrement est automatique.
+                      Aucun document pour ce mois. Cliquez sur « Nouveau », puis « Enregistrer » pour le conserver.
                     </td>
                   </tr>
                 ) : (

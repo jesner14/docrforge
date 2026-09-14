@@ -1,5 +1,5 @@
 import type { CurrencyCode } from "./helpers";
-import { uid } from "./helpers";
+import { asNumber, uid } from "./helpers";
 import { currentYearMonth, monthKey, parseMonthKey } from "./expenses";
 import { isOrganismeHeaderField, organismeHeaderFromUser } from "./organismeHeader";
 import { documentTitle, recipientOf } from "./templates";
@@ -94,14 +94,29 @@ function emptyFieldValue(field: TemplateField): unknown {
 export function freshDocData(template: DocTemplate, user: User, currency: CurrencyCode, year: number, month: number) {
   const day = Math.min(new Date().getDate(), new Date(year, month, 0).getDate());
   const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const defaults = template.defaults || {};
   const data: Record<string, unknown> = {
     ...organismeHeaderFromUser(user),
     currency,
     date: iso,
   };
   for (const field of template.fields ?? []) {
-    if (isOrganismeHeaderField(field.key) || field.key === "currency") continue;
-    data[field.key] = emptyFieldValue(field);
+    if (isOrganismeHeaderField(field.key) || field.key === "currency" || field.key === "date") continue;
+    // Pas de lignes démo : facture / devis partent vides.
+    if (field.type === "table") {
+      data[field.key] = [];
+      continue;
+    }
+    if (Object.prototype.hasOwnProperty.call(defaults, field.key)) {
+      const v = defaults[field.key];
+      data[field.key] = typeof v === "object" && v !== null ? JSON.parse(JSON.stringify(v)) : v;
+    } else {
+      data[field.key] = emptyFieldValue(field);
+    }
+  }
+  // Taux TVA utilisable dès qu’on active l’option (même si absente des defaults).
+  if (template.fields?.some((f) => f.key === "taxRate") && !asNumber(data.taxRate)) {
+    data.taxRate = 20;
   }
   return data;
 }

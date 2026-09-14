@@ -6,15 +6,28 @@ import {
   asString,
   asBool,
   asCurrency,
+  asHeaderColor,
+  asFooterColor,
+  asHeaderNameAlign,
+  logoHeaderSizePx,
+  headerForeground,
   currencyLabel,
   formatMoney,
   formatDateFr,
   interpolate,
   type CurrencyCode,
 } from "../lib/helpers";
-import { useSettings } from "../lib/settings";
+import { useOrganisme, useSettings } from "../lib/settings";
 
-function Sheet({ children, accent = "#1C2340" }: { children: ReactNode; accent?: string }) {
+function Sheet({
+  children,
+  accent = "#1C2340",
+  watermark,
+}: {
+  children: ReactNode;
+  accent?: string;
+  watermark?: string;
+}) {
   return (
     <div
       className="doc-preview-page bg-white rounded-xl shadow-xl text-sm"
@@ -27,63 +40,172 @@ function Sheet({ children, accent = "#1C2340" }: { children: ReactNode; accent?:
         margin: "0 auto",
         boxSizing: "border-box",
         overflow: "visible",
+        position: "relative",
       }}
     >
-      {children}
+      {watermark ? (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+            zIndex: 0,
+            overflow: "hidden",
+          }}
+        >
+          <img
+            src={watermark}
+            alt=""
+            style={{
+              width: "58%",
+              maxWidth: 440,
+              maxHeight: "58%",
+              objectFit: "contain",
+              opacity: 0.1,
+            }}
+          />
+        </div>
+      ) : null}
+      <div style={{ position: "relative", zIndex: 1 }}>{children}</div>
     </div>
   );
 }
 
-function CompanyHead({ data, kicker, showLegal = false }: { data: DocData; kicker: string; showLegal?: boolean }) {
-  return (
-    <div className="px-6 sm:px-8 py-8" style={{ background: "#1C2340", color: "#fff", boxSizing: "border-box" }}>
-      <div className="flex justify-between items-start gap-4">
-        <div className="flex items-start gap-3 min-w-0 flex-1">
-          {data.companyLogo ? (
-            <img
-              src={asString(data.companyLogo)}
-              alt=""
-              className="w-14 h-14 object-contain rounded bg-white/10 p-1 flex-shrink-0"
-            />
-          ) : null}
-          <div className="min-w-0">
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.25rem", fontWeight: 700, wordBreak: "break-word" }}>
-              {asString(data.companyName, "Votre entreprise")}
-            </div>
-            <div style={{ opacity: 0.55, fontSize: "0.75rem", marginTop: 6, lineHeight: 1.6, wordBreak: "break-word" }}>
-              {asString(data.companyAddress)}
-              <br />
-              {asString(data.companyEmail)}
-              {data.companyPhone ? ` · ${asString(data.companyPhone)}` : ""}
-              {showLegal && data.companySiret ? (
-                <>
-                  <br />
-                  SIRET {asString(data.companySiret)}
-                  {data.companyTva ? ` · TVA ${asString(data.companyTva)}` : ""}
-                </>
-              ) : null}
-            </div>
-          </div>
+function useDocHeaderColor(data: DocData) {
+  const { organisme } = useOrganisme();
+  return asHeaderColor(data.companyHeaderColor || organisme.headerColor);
+}
+
+function useDocFooterColor(data: DocData) {
+  const { organisme } = useOrganisme();
+  return asFooterColor(data.companyFooterColor || organisme.footerColor);
+}
+
+function useDocLogoOptions(data: DocData) {
+  const { organisme } = useOrganisme();
+  const logo = asString(data.companyLogo || organisme.logo);
+  const inHeader = asBool(data.companyLogoInHeader, organisme.logoInHeader !== false) && !!logo;
+  const watermark =
+    asBool(data.companyLogoAsBackground, !!organisme.logoAsBackground) && logo ? logo : undefined;
+  return { logo, inHeader, watermark };
+}
+
+function CompanyHead({ data, kicker, showLegal: _showLegal = false }: { data: DocData; kicker: string; showLegal?: boolean }) {
+  const accent = useDocHeaderColor(data);
+  const { inHeader, logo } = useDocLogoOptions(data);
+  const { organisme } = useOrganisme();
+  const nameAlign = asHeaderNameAlign(data.companyHeaderNameAlign || organisme.headerNameAlign);
+  const logoAlign = asHeaderNameAlign(data.companyLogoAlign || organisme.logoAlign);
+  const nameRight = nameAlign === "right";
+  const logoRight = logoAlign === "right";
+  const showDocRef = asBool(data.companyShowHeaderDocRef, organisme.showHeaderDocRef !== false);
+  const logoSize = logoHeaderSizePx(data.companyLogoScale ?? organisme.logoScale);
+  const fg = headerForeground(accent);
+  const muted = fg === "#FFFFFF" ? "rgba(255,255,255,0.55)" : "rgba(28,35,64,0.55)";
+
+  const logoEl = inHeader ? (
+    <img
+      src={logo}
+      alt=""
+      className="object-contain flex-shrink-0"
+      style={{
+        width: logoSize,
+        height: logoSize,
+      }}
+    />
+  ) : null;
+
+  const clientEl = (
+    <div className="min-w-0" style={{ textAlign: nameRight ? "right" : "left", width: nameRight ? "100%" : undefined }}>
+      {asString(data.date) ? (
+        <div style={{ color: muted, fontSize: "0.72rem", marginBottom: 6, letterSpacing: "0.01em" }}>
+          {asString(data.city, "Dakar")}, le {formatDateFr(asString(data.date))}
         </div>
-        <div className="text-right flex-shrink-0 max-w-[42%]">
-          <div style={{ fontSize: "0.6rem", opacity: 0.45, textTransform: "uppercase", letterSpacing: "0.12em" }}>
-            {kicker}
-            {data.currency ? ` · ${asCurrency(data.currency)}` : ""}
-          </div>
-          {data.docNumber ? (
-            <div
-              style={{
-                fontFamily: "'DM Mono', monospace",
-                fontSize: "1.05rem",
-                fontWeight: 500,
-                color: "#B8923A",
-                marginTop: 2,
-                wordBreak: "break-all",
-              }}
-            >
-              #{asString(data.docNumber)}
-            </div>
-          ) : null}
+      ) : null}
+      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.25rem", fontWeight: 700, wordBreak: "break-word" }}>
+        {asString(data.clientName, "—")}
+      </div>
+      {asString(data.clientAddress) ? (
+        <div style={{ color: muted, fontSize: "0.75rem", marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-line", wordBreak: "break-word" }}>
+          {asString(data.clientAddress)}
+        </div>
+      ) : null}
+      {asString(data.clientEmail) ? (
+        <div style={{ color: muted, fontSize: "0.75rem", marginTop: 4, wordBreak: "break-word" }}>
+          {asString(data.clientEmail)}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const docEl = (
+    <div className="min-w-0">
+      <div
+        style={{
+          fontSize: "0.72rem",
+          textTransform: "uppercase",
+          letterSpacing: "0.14em",
+          fontWeight: 700,
+          color: fg,
+          marginBottom: showDocRef && data.docNumber ? 6 : 0,
+        }}
+      >
+        {kicker}
+      </div>
+      {showDocRef && data.docNumber ? (
+        <div
+          style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: "1.05rem",
+            fontWeight: 500,
+            color: fg === "#FFFFFF" ? "#FFFFFF" : "#000000",
+            wordBreak: "break-all",
+          }}
+        >
+          #{asString(data.docNumber)}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <div
+      className="px-6 sm:px-8 py-8"
+      style={{
+        background: accent,
+        color: fg,
+        boxSizing: "border-box",
+        borderBottom: accent === "#FFFFFF" ? "1px solid rgba(28,35,64,0.12)" : undefined,
+      }}
+    >
+      <div className="flex justify-between items-start gap-4 w-full">
+        <div
+          className="flex items-start gap-3 min-w-0"
+          style={{
+            textAlign: "left",
+            flex: nameRight ? "0 1 auto" : "1 1 0%",
+          }}
+        >
+          {inHeader && !logoRight ? logoEl : null}
+          {!nameRight ? clientEl : docEl}
+        </div>
+        <div
+          className="flex items-start gap-3 min-w-0"
+          style={{
+            textAlign: "right",
+            marginLeft: "auto",
+            justifyContent: "flex-end",
+            alignItems: "flex-start",
+            flex: nameRight ? "1 1 0%" : "0 1 auto",
+            maxWidth: nameRight ? "58%" : undefined,
+          }}
+        >
+          {inHeader && logoRight ? logoEl : null}
+          {nameRight ? clientEl : docEl}
         </div>
       </div>
     </div>
@@ -94,17 +216,22 @@ function LineTable({
   data,
   showTax,
   showNotes = true,
+  showTotals = true,
   unitLabel = "Total",
 }: {
   data: DocData;
   showTax: boolean;
   showNotes?: boolean;
+  showTotals?: boolean;
   unitLabel?: string;
 }) {
   const items = asRows(data.items);
   const money = (n: number) => formatMoney(n, data.currency);
-  const sub = items.reduce((s, i) => s + asNumber(i.qty) * asNumber(i.unitPrice), 0);
-  const rate = asNumber(data.taxRate);
+  const lineItems = items.filter((i) => i.kind !== "photo");
+  const photoItems = items.filter((i) => i.kind === "photo");
+  const sub = lineItems.reduce((s, i) => s + asNumber(i.qty) * asNumber(i.unitPrice), 0);
+  // Si TVA affichée sans taux renseigné, fallback 20 % (cas des anciennes factures).
+  const rate = showTax ? (asNumber(data.taxRate) > 0 ? asNumber(data.taxRate) : 20) : 0;
   const tax = showTax ? sub * (rate / 100) : 0;
   const total = sub + tax;
 
@@ -137,7 +264,7 @@ function LineTable({
           </tr>
         </thead>
         <tbody>
-          {items.map((item, idx) => (
+          {lineItems.map((item, idx) => (
             <tr key={asString(item.id, String(idx))} style={{ borderBottom: "1px solid rgba(28,35,64,0.05)" }}>
               <td
                 className="py-2.5"
@@ -173,6 +300,7 @@ function LineTable({
           ))}
         </tbody>
       </table>
+      {showTotals ? (
       <div className="flex justify-end mt-4">
         <div style={{ width: "100%", maxWidth: 260, minWidth: 0 }}>
           <div
@@ -208,6 +336,39 @@ function LineTable({
           )}
         </div>
       </div>
+      ) : null}
+      {photoItems.length > 0 ? (
+        <div className="mt-6 space-y-4">
+          {photoItems.map((item, idx) => (
+            <div key={asString(item.id, String(idx))}>
+              {asString(item.image) ? (
+                <img
+                  src={asString(item.image)}
+                  alt={asString(item.caption) || ""}
+                  style={{
+                    display: "block",
+                    maxWidth: "100%",
+                    maxHeight: 320,
+                    width: "auto",
+                    height: "auto",
+                    objectFit: "contain",
+                    margin: "0 auto",
+                  }}
+                />
+              ) : (
+                <div style={{ color: "#bbb", fontSize: "0.8rem", textAlign: "center", padding: "12px 0" }}>
+                  Photo non renseignée
+                </div>
+              )}
+              {asString(item.caption) ? (
+                <div style={{ marginTop: 8, textAlign: "center", fontSize: "0.78rem", color: "#666" }}>
+                  {asString(item.caption)}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {showNotes && asString(data.notes) && (
         <div className="mt-6 p-4 rounded-lg" style={{ background: "#F7F6F2", borderLeft: "3px solid #B8923A" }}>
           <div
@@ -253,7 +414,9 @@ function ClientBand({
         <div style={{ fontSize: "0.8rem", color: "#777", marginTop: 2, whiteSpace: "pre-line", wordBreak: "break-word" }}>
           {asString(data.clientAddress)}
         </div>
-        <div style={{ fontSize: "0.8rem", color: "#777", wordBreak: "break-word" }}>{asString(data.clientEmail)}</div>
+        {asString(data.clientEmail) ? (
+          <div style={{ fontSize: "0.8rem", color: "#777", wordBreak: "break-word" }}>{asString(data.clientEmail)}</div>
+        ) : null}
       </div>
       <div className="text-right text-xs flex-shrink-0" style={{ color: "#555", maxWidth: "48%" }}>
         <div>
@@ -278,6 +441,370 @@ function ClientBand({
   );
 }
 
+function buildInvoiceFooterLines(data: DocData): string[] {
+  const lines: string[] = [];
+  const address = asString(data.companyAddress).trim();
+  if (address) lines.push(address);
+
+  const rc = asString(data.companyRc).trim();
+  const ninea = asString(data.companyNinea).trim();
+  const legal: string[] = [];
+  if (rc) legal.push(`RC: ${rc}`);
+  if (ninea) legal.push(`NINEA: ${ninea}`);
+  if (legal.length) lines.push(legal.join(" - "));
+
+  const rib = asString(data.companyRib).trim();
+  if (rib) lines.push(`Rib: ${rib}`);
+
+  const contact: string[] = [];
+  const tel = asString(data.companyPhone).trim();
+  const website = asString(data.companyWebsite).trim();
+  const email = asString(data.companyEmail).trim();
+  if (tel) contact.push(`Tel: ${tel}`);
+  if (website) contact.push(website);
+  if (email) contact.push(email);
+  if (contact.length) lines.push(contact.join(" // "));
+
+  let slogan = asString(data.companySlogan).trim();
+  if (slogan) {
+    if (!/^«/.test(slogan)) {
+      slogan = `« ${slogan.replace(/^["«]\s*|\s*["»]$/g, "").trim()} »`;
+    }
+    lines.push(slogan);
+  }
+
+  return lines;
+}
+
+function DeliveryNote({ data }: { data: DocData }) {
+  const accent = "#0E7C7B";
+  const { logo, inHeader, watermark } = useDocLogoOptions(data);
+  const showTax = asBool(data.showTva);
+  const footerLines = buildInvoiceFooterLines(data);
+  const money = (n: number) => formatMoney(n, data.currency);
+  const lineItems = asRows(data.items).filter((i) => i.kind !== "photo");
+  const sub = lineItems.reduce((s, i) => s + asNumber(i.qty) * asNumber(i.unitPrice), 0);
+  const rate = showTax ? (asNumber(data.taxRate) > 0 ? asNumber(data.taxRate) : 20) : 0;
+  const tax = showTax ? sub * (rate / 100) : 0;
+  const total = sub + tax;
+  const box = {
+    border: "1.5px solid #1C2340",
+    borderRadius: 10,
+    padding: "10px 12px",
+  } as const;
+
+  const contactLines = [
+    asString(data.companyAddress).trim(),
+    asString(data.companyPhone).trim() ? `Tél. ${asString(data.companyPhone).trim()}` : "",
+    asString(data.companyEmail).trim() ? `Adresse mail : ${asString(data.companyEmail).trim()}` : "",
+    asString(data.companyWebsite).trim() ? `Site internet : ${asString(data.companyWebsite).trim()}` : "",
+  ].filter(Boolean);
+
+  const totalRow = (label: string, value: string, bg: string, fg = "#fff") => (
+    <div
+      className="flex justify-between gap-3 px-3 py-2"
+      style={{ background: bg, color: fg, fontSize: "0.78rem", fontWeight: 700 }}
+    >
+      <span>{label}</span>
+      <span style={{ fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <Sheet accent={accent} watermark={watermark}>
+      <div className="px-6 sm:px-8 pt-6 pb-3" style={{ boxSizing: "border-box" }}>
+        <div className="flex justify-between items-start gap-6">
+          <div className="min-w-0" style={{ flex: "0 1 42%" }}>
+            {inHeader && logo ? (
+              <img
+                src={logo}
+                alt=""
+                className="object-contain mb-3"
+                style={{ width: 88, height: 88, border: "1px solid rgba(28,35,64,0.15)", borderRadius: 6 }}
+              />
+            ) : (
+              <div
+                className="mb-3 flex items-center justify-center text-center"
+                style={{
+                  width: 88,
+                  height: 88,
+                  border: "1.5px solid #1C2340",
+                  borderRadius: 6,
+                  fontSize: "0.62rem",
+                  color: "#888",
+                  lineHeight: 1.3,
+                  padding: 6,
+                }}
+              >
+                VOTRE
+                <br />
+                LOGO ICI
+              </div>
+            )}
+            <div style={{ fontSize: "0.72rem", color: "#444", lineHeight: 1.55, whiteSpace: "pre-line" }}>
+              {contactLines.length ? contactLines.join("\n") : "—"}
+            </div>
+          </div>
+
+          <div className="min-w-0" style={{ flex: "1 1 52%" }}>
+            <div
+              className="text-center mb-3"
+              style={{
+                ...box,
+                background: "#fff",
+                fontFamily: "'Playfair Display', serif",
+                fontWeight: 700,
+                fontSize: "1.15rem",
+                color: "#1C2340",
+                lineHeight: 1.35,
+              }}
+            >
+              Bon de livraison
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.95rem", fontWeight: 600, marginTop: 2 }}>
+                N° {asString(data.docNumber, "—")}
+              </div>
+            </div>
+            <div style={{ fontSize: "0.78rem", color: "#333", lineHeight: 1.7, marginBottom: 10 }}>
+              <div>
+                <span style={{ color: "#777" }}>En date du </span>
+                {asString(data.date) ? formatDateFr(asString(data.date)) : "—"}
+              </div>
+              <div>
+                <span style={{ color: "#777" }}>Référence client </span>
+                {asString(data.clientRef, "—")}
+              </div>
+              <div>
+                <span style={{ color: "#777" }}>À l&apos;attention de </span>
+                {asString(data.attentionOf, "—")}
+              </div>
+            </div>
+            <div style={{ ...box, minHeight: 88, fontSize: "0.82rem", color: "#1C2340", lineHeight: 1.55 }}>
+              <div style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                {asString(data.clientName, "—")}
+              </div>
+              {asString(data.clientAddress) ? (
+                <div style={{ color: "#555", marginTop: 4, whiteSpace: "pre-line" }}>{asString(data.clientAddress)}</div>
+              ) : null}
+              {asString(data.clientEmail) ? (
+                <div style={{ color: "#777", marginTop: 4, fontSize: "0.75rem" }}>{asString(data.clientEmail)}</div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="mt-4 pt-2"
+          style={{
+            borderTop: "1px solid rgba(28,35,64,0.2)",
+            fontSize: "0.78rem",
+            color: asString(data.generalComment) ? "#444" : "#aaa",
+            minHeight: 28,
+          }}
+        >
+          <span style={{ color: "#777" }}>Commentaire général : </span>
+          {asString(data.generalComment) || "zone libre"}
+        </div>
+      </div>
+
+      <LineTable data={data} showTax={showTax} showNotes={false} showTotals={false} />
+
+      <div className="px-6 sm:px-8 pb-4" style={{ boxSizing: "border-box" }}>
+        <div className="flex justify-between items-start gap-4">
+          <div className="space-y-3 min-w-0" style={{ flex: "1 1 55%" }}>
+            <div style={{ ...box, minHeight: 72 }}>
+              <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#1C2340", marginBottom: 6 }}>
+                Observation(s) lors de la réception
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "#555", whiteSpace: "pre-line", minHeight: 36 }}>
+                {asString(data.receptionNotes) || " "}
+              </div>
+            </div>
+            <div style={{ ...box, minHeight: 64 }}>
+              <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#1C2340", marginBottom: 6 }}>
+                Nom, signature et date du réceptionnaire
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "#444" }}>{asString(data.receiverName) || " "}</div>
+            </div>
+          </div>
+          <div className="overflow-hidden flex-shrink-0" style={{ width: 220, borderRadius: 6, border: "1px solid rgba(28,35,64,0.12)" }}>
+            {totalRow("SOUS-TOTAL", money(sub), accent)}
+            {totalRow(showTax ? "TOTAL HT" : "TOTAL", money(sub), "#1C2340")}
+            {showTax ? totalRow(`TVA ${rate}%`, money(tax), "#F3F4F6", "#333") : null}
+            {showTax ? totalRow("TOTAL TTC", money(total), accent) : null}
+          </div>
+        </div>
+      </div>
+
+      {footerLines.length > 0 ? (
+        <div
+          className="px-8 py-3 text-center"
+          style={{
+            fontSize: "0.68rem",
+            color: "#555",
+            lineHeight: 1.5,
+            borderTop: "1px solid rgba(28,35,64,0.12)",
+          }}
+        >
+          {footerLines.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      ) : null}
+    </Sheet>
+  );
+}
+
+function formatDateLetter(iso: string) {
+  const raw = formatDateFr(iso);
+  if (!raw || raw === "—") return "—";
+  // « 3 avril 2026 » → « 3 Avril 2026 » (comme sur le modèle Word)
+  return raw.replace(/\b([a-zéèêëàâäôöùûüîïç]+)\b/gi, (word, _m, offset) => {
+    if (offset === 0) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+}
+
+function SubmissionLetter({ data }: { data: DocData }) {
+  const { logo, inHeader } = useDocLogoOptions(data);
+  // Filigrane uniquement si l’option est cochée sur la lettre (désactivé par défaut).
+  const watermark = asBool(data.showLogoBackground) && logo ? logo : undefined;
+  const dateLabel = formatDateLetter(asString(data.date));
+  const city = asString(data.city, "Dakar");
+  const amount = asString(data.offerAmount).trim() || "………………….";
+  const days = asNumber(data.validityDays) > 0 ? String(asNumber(data.validityDays)) : "20";
+  const supply = asString(data.supplyDescription, "le matériel et équipements informatique");
+  const recipient = asString(data.recipientBlock).trim();
+  const salutation = asString(data.salutation, "Monsieur le Directeur,");
+  const object = asString(data.object);
+  const reference = asString(data.reference);
+  const signatory = asString(data.signatory);
+  const signatoryTitle = asString(data.signatoryTitle);
+
+  const contactLines = [
+    asString(data.companyAddress).trim(),
+    asString(data.companyPhone).trim() ? `Tél. ${asString(data.companyPhone).trim()}` : "",
+    asString(data.companyEmail).trim() ? `Adresse mail : ${asString(data.companyEmail).trim()}` : "",
+    asString(data.companyWebsite).trim() ? `Site internet : ${asString(data.companyWebsite).trim()}` : "",
+  ].filter(Boolean);
+
+  return (
+    <Sheet accent="#1C2340" watermark={watermark}>
+      <div className="px-10 sm:px-12 pt-6 pb-2" style={{ boxSizing: "border-box" }}>
+        {inHeader && logo ? (
+          <img
+            src={logo}
+            alt=""
+            className="object-contain mb-3"
+            style={{ width: 88, height: 88, border: "1px solid rgba(28,35,64,0.15)", borderRadius: 6 }}
+          />
+        ) : (
+          <div
+            className="mb-3 flex items-center justify-center text-center"
+            style={{
+              width: 88,
+              height: 88,
+              border: "1.5px solid #1C2340",
+              borderRadius: 6,
+              fontSize: "0.62rem",
+              color: "#888",
+              lineHeight: 1.3,
+              padding: 6,
+            }}
+          >
+            VOTRE
+            <br />
+            LOGO ICI
+          </div>
+        )}
+        <div style={{ fontSize: "0.72rem", color: "#444", lineHeight: 1.55, whiteSpace: "pre-line" }}>
+          {contactLines.length ? contactLines.join("\n") : "—"}
+        </div>
+      </div>
+
+      <div
+        className="px-10 sm:px-12 py-9"
+        style={{
+          boxSizing: "border-box",
+          color: "#1C2340",
+          fontSize: "0.92rem",
+          lineHeight: 1.7,
+          fontFamily: "'Times New Roman', 'Liberation Serif', Georgia, serif",
+        }}
+      >
+        <div style={{ textAlign: "right", marginBottom: 28 }}>Le {dateLabel}</div>
+
+        <h1
+          style={{
+            textAlign: "center",
+            fontWeight: 700,
+            fontSize: "1.2rem",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            marginBottom: 32,
+            fontFamily: "'Times New Roman', 'Liberation Serif', Georgia, serif",
+          }}
+        >
+          LETTRE DE SOUMISSION
+        </h1>
+
+        <div
+          style={{
+            textAlign: "right",
+            marginBottom: 28,
+            marginLeft: "auto",
+            maxWidth: "58%",
+            whiteSpace: "pre-line",
+          }}
+        >
+          {recipient || "—"}
+        </div>
+
+        <div style={{ marginBottom: 6 }}>
+          <span style={{ fontWeight: 700 }}>Objet&nbsp;:</span> {object || "—"}
+        </div>
+        <div style={{ marginBottom: 22 }}>
+          <span style={{ fontWeight: 700 }}>Réf&nbsp;:</span> {reference || "—"}
+        </div>
+
+        <div style={{ marginBottom: 16 }}>{salutation}</div>
+
+        <p style={{ textAlign: "justify", marginBottom: 14 }}>
+          Après avoir examiné le Dossier d&apos;entente directe dont nous vous accusons ici officiellement réception,
+          nous, soussignés, offrons de fournir et de livrer {supply} conformément aux spécifications techniques pour
+          la somme de {amount} ou autres montants énumérés au Bordereau Descriptif et Quantitatif ci-joint et qui fait
+          partie de la présente entente directe.
+        </p>
+
+        <p style={{ textAlign: "justify", marginBottom: 14 }}>
+          Nous nous engageons, si notre offre est acceptée, à livrer les fournitures selon les dispositions précisées
+          dans le Bordereau Descriptif Quantitatif.
+        </p>
+
+        <p style={{ textAlign: "justify", marginBottom: 14 }}>
+          Nous nous engageons sur les termes de cette offre pour une période de {days} jours à compter de la date
+          fixée pour l&apos;ouverture des plis, telle que stipulée dans la Lettre d&apos;invitation ; l&apos;offre
+          nous engagera et sera acceptée à tout moment avant la fin de cette période.
+        </p>
+
+        <p style={{ textAlign: "justify", marginBottom: 28 }}>
+          Jusqu&apos;à ce qu&apos;un marché en bonne et due forme soit préparé et signé, la présente offre complétée
+          par la notification d&apos;attribution du marché constituera un marché nous obligeant réciproquement.
+        </p>
+
+        <div style={{ textAlign: "right", marginBottom: 48 }}>
+          Fait à {city} le {dateLabel}.
+        </div>
+
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontWeight: 600 }}>Signature</div>
+          {signatory ? <div style={{ marginTop: 36 }}>{signatory}</div> : <div style={{ height: 48 }} />}
+          {signatoryTitle ? <div style={{ fontSize: "0.85rem", color: "#555" }}>{signatoryTitle}</div> : null}
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
 function Commercial({
   data,
   title,
@@ -286,6 +813,7 @@ function Commercial({
   showDueDate = true,
   showObject = true,
   showNotes = true,
+  showClientBand = true,
 }: {
   data: DocData;
   title: string;
@@ -294,15 +822,37 @@ function Commercial({
   showDueDate?: boolean;
   showObject?: boolean;
   showNotes?: boolean;
+  showClientBand?: boolean;
 }) {
+  const footerLines = buildInvoiceFooterLines(data);
+  const accent = useDocHeaderColor(data);
+  const footerBg = useDocFooterColor(data);
+  const footerFg = headerForeground(footerBg);
+  const { watermark } = useDocLogoOptions(data);
+
   return (
-    <Sheet>
+    <Sheet accent={accent} watermark={watermark}>
       <CompanyHead data={data} kicker={title} showLegal={showLegal} />
-      <ClientBand data={data} showDueDate={showDueDate} showObject={showObject} />
+      {showClientBand ? <ClientBand data={data} showDueDate={showDueDate} showObject={showObject} /> : null}
       <LineTable data={data} showTax={showTax} showNotes={showNotes} />
-      <div className="px-8 py-3 text-center" style={{ background: "#1C2340", fontSize: "0.65rem", color: "rgba(255,255,255,0.3)" }}>
-        {asString(data.companyName)} · {asString(data.companyAddress)}
-      </div>
+      {footerLines.length > 0 ? (
+        <div
+          className="px-8 py-3.5 text-center"
+          style={{
+            background: footerBg,
+            fontSize: "0.72rem",
+            color: footerFg,
+            lineHeight: 1.55,
+            fontWeight: 500,
+            letterSpacing: "0.01em",
+            borderTop: footerBg === "#FFFFFF" ? "1px solid rgba(28,35,64,0.12)" : undefined,
+          }}
+        >
+          {footerLines.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      ) : null}
     </Sheet>
   );
 }
@@ -341,8 +891,10 @@ function SimpleTable({
 }
 
 function LetterShell({ data, kicker, children }: { data: DocData; kicker: string; children: ReactNode }) {
+  const accent = useDocHeaderColor(data);
+  const { watermark } = useDocLogoOptions(data);
   return (
-    <Sheet>
+    <Sheet accent={accent} watermark={watermark}>
       <CompanyHead data={data} kicker={kicker} />
       <div className="p-8 space-y-5" style={{ color: "#1C2340" }}>
         {children}
@@ -371,13 +923,15 @@ function Signature({ data }: { data: DocData }) {
 
 function CustomBlocks({ blocks, data, template }: { blocks: DesignerBlock[]; data: DocData; template: DocTemplate }) {
   const fields = template.fields ?? [];
+  const accent = useDocHeaderColor(data);
+  const { watermark } = useDocLogoOptions(data);
   return (
-    <Sheet accent="#B8923A">
+    <Sheet accent="#B8923A" watermark={watermark}>
       <div className="p-8 space-y-4 min-h-[640px]">
         {blocks.map((b) => {
           if (b.type === "header-band") {
             return (
-              <div key={b.id} className="-mx-8 -mt-8 mb-4 px-8 py-6" style={{ background: "#1C2340", color: "#fff" }}>
+              <div key={b.id} className="-mx-8 -mt-8 mb-4 px-8 py-6" style={{ background: accent, color: headerForeground(accent) }}>
                 <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.2rem", fontWeight: 700 }}>
                   {interpolate(b.content || "{{companyName}}", data)}
                 </div>
@@ -470,6 +1024,14 @@ export function DocumentPreview({
     return <CustomBlocks blocks={template.blocks} data={data} template={template} />;
   }
 
+  if (layout === "delivery-note") {
+    return <DeliveryNote data={data} />;
+  }
+
+  if (layout === "submission-letter") {
+    return <SubmissionLetter data={data} />;
+  }
+
   if (layout.startsWith("invoice") || layout === "quote" || layout === "purchase-order" || layout === "receipt") {
     const titles: Record<string, string> = {
       invoice: "Facture",
@@ -481,15 +1043,17 @@ export function DocumentPreview({
       receipt: "Reçu",
     };
     if (layout === "invoice") {
+      const showTax = asBool(data.showTva);
       return (
         <Commercial
           data={data}
           title={titles.invoice}
-          showTax={asBool(data.showTva)}
+          showTax={showTax}
           showLegal={asBool(data.showLegal)}
           showDueDate={asBool(data.showDueDate, true)}
           showObject={asBool(data.showObject)}
           showNotes={asBool(data.showNotes, true)}
+          showClientBand={asBool(data.showClientBand, true)}
         />
       );
     }
@@ -504,6 +1068,7 @@ export function DocumentPreview({
         showDueDate={layout !== "purchase-order"}
         showObject={layout === "invoice-commercial" || layout === "quote" || layout === "purchase-order"}
         showNotes
+        showClientBand={asBool(data.showClientBand, true)}
       />
     );
   }
@@ -837,8 +1402,16 @@ export function DocumentPreview({
   }
 
   return (
-    <Sheet>
-      <CompanyHead data={data} kicker={template.name} />
+    <GenericFallback data={data} templateName={template.name} />
+  );
+}
+
+function GenericFallback({ data, templateName }: { data: DocData; templateName: string }) {
+  const accent = useDocHeaderColor(data);
+  const { watermark } = useDocLogoOptions(data);
+  return (
+    <Sheet accent={accent} watermark={watermark}>
+      <CompanyHead data={data} kicker={templateName} />
       <div className="p-8 text-sm" style={{ color: "#555" }}>
         Aperçu générique — renseignez les champs à gauche.
       </div>

@@ -161,13 +161,36 @@ function Workspace({
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [saveAsName, setSaveAsName] = useState("");
   const [saveAsData, setSaveAsData] = useState<DocData>({});
+  const [docFilter, setDocFilter] = useState<"all" | "facture" | "bon-livraison">("all");
 
   const allowedIds = useMemo(() => allowedTemplateIds(profile), [profile]);
   const catalog = useMemo(() => templatesForAllowedIds(allowedIds, customTemplates), [allowedIds, customTemplates]);
   const selected = selectedId ? findTemplate(selectedId, customTemplates) : undefined;
-  const myDocs = documents.filter((d) => d.authorId === user.id || modules.includes(d.category));
+  const myDocs = useMemo(() => {
+    const list = documents.filter((d) => d.authorId === user.id || modules.includes(d.category));
+    const filtered =
+      docFilter === "facture"
+        ? list.filter((d) => d.templateId === "facture" || d.templateId.startsWith("facture"))
+        : docFilter === "bon-livraison"
+          ? list.filter((d) => d.templateId === "bon-livraison")
+          : list;
+    return [...filtered].sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  }, [documents, user.id, modules, docFilter]);
   const myStored = useMemo(() => storedByUser(customTemplates, user), [customTemplates, user]);
   const modelChoices = selected ? selectableModels(selected, customTemplates, user) : [];
+
+  const factureCount = useMemo(
+    () => documents.filter((d) => (d.authorId === user.id || modules.includes(d.category)) && (d.templateId === "facture" || d.templateId.startsWith("facture"))).length,
+    [documents, user.id, modules]
+  );
+  const blCount = useMemo(
+    () => documents.filter((d) => (d.authorId === user.id || modules.includes(d.category)) && d.templateId === "bon-livraison").length,
+    [documents, user.id, modules]
+  );
+  const allDocsCount = useMemo(
+    () => documents.filter((d) => d.authorId === user.id || modules.includes(d.category)).length,
+    [documents, user.id, modules]
+  );
 
   const goTo = (v: View) => {
     const needed = VIEW_SCREEN[v];
@@ -831,11 +854,40 @@ function Workspace({
                 <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.8rem", fontWeight: 700, color: "#1C2340" }}>
                   Mes documents
                 </h1>
-                <p style={{ color: "#999", fontSize: "0.88rem", marginTop: 5 }}>Historique des exports de votre profil.</p>
+                <p style={{ color: "#999", fontSize: "0.88rem", marginTop: 5 }}>
+                  Factures et bons de livraison enregistrés — cliquez pour rouvrir.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {(
+                    [
+                      { id: "all" as const, label: `Tous (${allDocsCount})` },
+                      { id: "facture" as const, label: `Factures (${factureCount})` },
+                      { id: "bon-livraison" as const, label: `Bons de livraison (${blCount})` },
+                    ]
+                  ).map((f) => {
+                    const active = docFilter === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setDocFilter(f.id)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
+                        style={{
+                          background: active ? "#1C2340" : "#fff",
+                          color: active ? "#fff" : "#1C2340",
+                          borderColor: active ? "#1C2340" : "rgba(28,35,64,0.15)",
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <RecentTable
                 docs={myDocs}
                 showActions
+                emptyHint="Créez une facture ou un bon de livraison, puis cliquez sur Enregistrer pour le retrouver ici."
                 onOpen={(doc) => openTemplate(doc.templateId, doc.id)}
               />
             </div>
@@ -915,16 +967,20 @@ function RecentTable({
   docs,
   onOpen,
   showActions,
+  emptyHint,
 }: {
   docs: SavedDocument[];
   onOpen: (d: SavedDocument) => void;
   showActions?: boolean;
+  emptyHint?: string;
 }) {
   if (!docs.length) {
     return (
       <div className="bg-card rounded-xl border border-border p-10 text-center">
-        <p className="text-sm font-semibold" style={{ color: "#1C2340" }}>Aucun document généré</p>
-        <p className="text-sm text-muted-foreground mt-2">Exportez un modèle depuis l’éditeur pour le retrouver ici.</p>
+        <p className="text-sm font-semibold" style={{ color: "#1C2340" }}>Aucun document enregistré</p>
+        <p className="text-sm text-muted-foreground mt-2">
+          {emptyHint || "Enregistrez un document depuis l’éditeur pour le retrouver ici."}
+        </p>
       </div>
     );
   }

@@ -47,6 +47,19 @@ export const SEED_ORGANISMES: Organisme[] = [
     phone: "",
     logo: "",
     currency: "EUR",
+    ninea: "",
+    rc: "",
+    rib: "",
+    website: "",
+    slogan: "",
+    headerColor: "#1C2340",
+    footerColor: "#2F4F9A",
+    logoInHeader: true,
+    logoAsBackground: false,
+    headerNameAlign: "left",
+    logoAlign: "left",
+    logoScale: 1,
+    showHeaderDocRef: true,
   },
 ];
 
@@ -206,6 +219,19 @@ export function newUser(profileId: string, organismeId: string, org?: Organisme)
     companyAddress: org?.address || "",
     companyEmail: "",
     companyPhone: org?.phone || "",
+    companyNinea: org?.ninea || "",
+    companyRc: org?.rc || "",
+    companyRib: org?.rib || "",
+    companyWebsite: org?.website || "",
+    companySlogan: org?.slogan || "",
+    companyHeaderColor: org?.headerColor || "#1C2340",
+    companyFooterColor: org?.footerColor || "#2F4F9A",
+    companyLogoInHeader: org?.logoInHeader !== false,
+    companyLogoAsBackground: !!org?.logoAsBackground,
+    companyHeaderNameAlign: org?.headerNameAlign === "right" ? "right" : "left",
+    companyLogoAlign: org?.logoAlign === "right" ? "right" : "left",
+    companyLogoScale: org?.logoScale === 2 || org?.logoScale === 3 || org?.logoScale === 4 ? org.logoScale : 1,
+    companyShowHeaderDocRef: org?.showHeaderDocRef !== false,
     initials: "",
     role: "facturation",
   };
@@ -213,14 +239,31 @@ export function newUser(profileId: string, organismeId: string, org?: Organisme)
 
 export function applyOrganisme(user: User, org: Organisme | null): User {
   if (!org) return user;
+  const orgEmail = (org.email || "").trim();
+  const userEmail = (user.companyEmail || "").trim();
+  // Ignore les e-mails techniques auto-générés (ex. login@organisme.local)
+  const cleanedUserEmail = userEmail.endsWith(".local") ? "" : userEmail;
   return {
     ...user,
     organismeId: org.id,
     company: org.name,
     companyAddress: org.address,
-    companyEmail: org.email || user.companyEmail,
+    companyEmail: orgEmail || cleanedUserEmail,
     companyPhone: org.phone || user.companyPhone,
     companyLogo: org.logo || undefined,
+    companyNinea: org.ninea || "",
+    companyRc: org.rc || "",
+    companyRib: org.rib || "",
+    companyWebsite: org.website || "",
+    companySlogan: org.slogan || "",
+    companyHeaderColor: org.headerColor || "#1C2340",
+    companyFooterColor: org.footerColor || "#2F4F9A",
+    companyLogoInHeader: org.logoInHeader !== false,
+    companyLogoAsBackground: !!org.logoAsBackground,
+    companyHeaderNameAlign: org.headerNameAlign === "right" ? "right" : "left",
+    companyLogoAlign: org.logoAlign === "right" ? "right" : "left",
+    companyLogoScale: org.logoScale === 2 || org.logoScale === 3 || org.logoScale === 4 ? org.logoScale : 1,
+    companyShowHeaderDocRef: org.showHeaderDocRef !== false,
   };
 }
 
@@ -233,6 +276,19 @@ export function newOrganisme(): Organisme {
     phone: "",
     logo: "",
     currency: "EUR",
+    ninea: "",
+    rc: "",
+    rib: "",
+    website: "",
+    slogan: "",
+    headerColor: "#1C2340",
+    footerColor: "#2F4F9A",
+    logoInHeader: true,
+    logoAsBackground: false,
+    headerNameAlign: "left",
+    logoAlign: "left",
+    logoScale: 1,
+    showHeaderDocRef: true,
   };
 }
 

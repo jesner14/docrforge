@@ -6,16 +6,50 @@ import { ensureDefaultProfiles, ensureProfilesForAllOrganismes, migrateUsersToOr
 async function insertSeed() {
   for (const o of SEED_ORGANISMES) {
     await query(
-      `INSERT INTO organismes (id, name, address, email, phone, logo, currency)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO organismes (id, name, address, email, phone, logo, currency, ninea, rc, rib, website, slogan, header_color, footer_color, logo_in_header, logo_as_background, header_name_align, logo_align, logo_scale, show_header_doc_ref)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name,
          address = EXCLUDED.address,
          email = EXCLUDED.email,
          phone = EXCLUDED.phone,
          logo = EXCLUDED.logo,
-         currency = EXCLUDED.currency`,
-      [o.id, o.name, o.address, o.email, o.phone, o.logo, o.currency]
+         currency = EXCLUDED.currency,
+         ninea = EXCLUDED.ninea,
+         rc = EXCLUDED.rc,
+         rib = EXCLUDED.rib,
+         website = EXCLUDED.website,
+         slogan = EXCLUDED.slogan,
+         header_color = EXCLUDED.header_color,
+         footer_color = EXCLUDED.footer_color,
+         logo_in_header = EXCLUDED.logo_in_header,
+         logo_as_background = EXCLUDED.logo_as_background,
+         header_name_align = EXCLUDED.header_name_align,
+         logo_align = EXCLUDED.logo_align,
+         logo_scale = EXCLUDED.logo_scale,
+         show_header_doc_ref = EXCLUDED.show_header_doc_ref`,
+      [
+        o.id,
+        o.name,
+        o.address,
+        o.email,
+        o.phone,
+        o.logo,
+        o.currency,
+        o.ninea || "",
+        o.rc || "",
+        o.rib || "",
+        o.website || "",
+        o.slogan || "",
+        o.headerColor || "#1C2340",
+        o.footerColor || "#2F4F9A",
+        o.logoInHeader !== false,
+        !!o.logoAsBackground,
+        o.headerNameAlign === "right" ? "right" : "left",
+        o.logoAlign === "right" ? "right" : "left",
+        o.logoScale === 2 || o.logoScale === 3 || o.logoScale === 4 ? o.logoScale : 1,
+        o.showHeaderDocRef !== false,
+      ]
     );
   }
 

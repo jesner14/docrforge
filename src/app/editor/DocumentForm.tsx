@@ -1,4 +1,4 @@
-import { PlusCircle, Trash2 } from "lucide-react";
+import { ImagePlus, PlusCircle, Trash2 } from "lucide-react";
 import type { DocData, DocTemplate, TemplateField } from "../lib/types";
 import { asNumber, asRows, asString, asBool, CURRENCY_OPTIONS, formatMoney, inp, lbl, uid } from "../lib/helpers";
 import { visibleFormFields } from "../lib/organismeHeader";
@@ -14,6 +14,10 @@ function groupFields(fields: TemplateField[]) {
     map.get(s)!.push(f);
   });
   return [...map.entries()];
+}
+
+function isPhotoRow(row: Record<string, unknown>) {
+  return row.kind === "photo";
 }
 
 export function DocumentForm({
@@ -48,11 +52,26 @@ export function DocumentForm({
   };
 
   const addRow = (field: TemplateField) => {
-    const row: Record<string, unknown> = { id: uid() };
+    const row: Record<string, unknown> = { id: uid(), kind: "line" };
     (field.columns || []).forEach((c) => {
       row[c.key] = c.type === "number" ? 0 : "";
     });
     set(field.key, [...asRows(data[field.key]), row], { immediate: true });
+  };
+
+  const addPhotoRow = (field: TemplateField) => {
+    set(
+      field.key,
+      [...asRows(data[field.key]), { id: uid(), kind: "photo", image: "", caption: "" }],
+      { immediate: true }
+    );
+  };
+
+  const onPhotoFile = (field: TemplateField, id: string, file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => updateRow(field, id, "image", String(reader.result || ""));
+    reader.readAsDataURL(file);
   };
 
   const removeRow = (field: TemplateField, id: string) => {
@@ -80,53 +99,113 @@ export function DocumentForm({
                 const cols = field.columns || [];
                 const rows = asRows(data[field.key]);
                 const isMoney = cols.some((c) => c.key === "unitPrice");
+                const allowPhotos = field.key === "items" || isMoney;
                 const currency = settings.currency;
                 return (
                   <div key={field.key} className="col-span-2 space-y-2">
-                    {rows.map((row) => (
-                      <div key={asString(row.id)} className="flex gap-2 items-center">
-                        {cols.map((col) => (
-                          <input
-                            key={col.key}
-                            className={fieldInp + (col.type === "number" ? " text-right" : "")}
-                            style={{ flex: col.type === "number" ? "0 0 90px" : 1 }}
-                            type={col.type === "number" ? "number" : col.type === "date" ? "date" : "text"}
-                            placeholder={col.label}
-                            value={asString(row[col.key])}
-                            onChange={(e) =>
-                              updateRow(
-                                field,
-                                asString(row.id),
-                                col.key,
-                                col.type === "number" ? parseFloat(e.target.value) || 0 : e.target.value
-                              )
-                            }
-                          />
-                        ))}
-                        {isMoney && (
-                          <div
-                            className="text-xs font-semibold text-right flex-shrink-0"
-                            style={{ fontFamily: "'DM Mono', monospace", color: "#1C2340", minWidth: currency === "FCFA" ? 108 : 88 }}
-                          >
-                            {formatMoney(asNumber(row.qty) * asNumber(row.unitPrice), currency)}
-                          </div>
-                        )}
-                        <button
-                          onClick={() => removeRow(field, asString(row.id))}
-                          className="text-muted-foreground hover:text-destructive p-1"
+                    {rows.map((row) =>
+                      isPhotoRow(row) ? (
+                        <div
+                          key={asString(row.id)}
+                          className="flex gap-2 items-start rounded-lg border border-border p-2"
+                          style={{ background: "#F7F6F2" }}
                         >
-                          <Trash2 size={13} />
+                          <div
+                            className="flex-shrink-0 rounded border border-border overflow-hidden flex items-center justify-center"
+                            style={{ width: 72, height: 72, background: "#fff" }}
+                          >
+                            {asString(row.image) ? (
+                              <img src={asString(row.image)} alt="" className="max-w-full max-h-full object-contain" />
+                            ) : (
+                              <ImagePlus size={20} style={{ color: "#ccc" }} />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold cursor-pointer" style={{ color: "#B8923A" }}>
+                              <ImagePlus size={13} />
+                              {asString(row.image) ? "Changer la photo" : "Choisir une photo"}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => onPhotoFile(field, asString(row.id), e.target.files?.[0] ?? null)}
+                              />
+                            </label>
+                            <input
+                              className={fieldInp}
+                              placeholder="Légende (optionnel)"
+                              value={asString(row.caption)}
+                              onChange={(e) => updateRow(field, asString(row.id), "caption", e.target.value)}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeRow(field, asString(row.id))}
+                            className="text-muted-foreground hover:text-destructive p-1"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div key={asString(row.id)} className="flex gap-2 items-center">
+                          {cols.map((col) => (
+                            <input
+                              key={col.key}
+                              className={fieldInp + (col.type === "number" ? " text-right" : "")}
+                              style={{ flex: col.type === "number" ? "0 0 90px" : 1 }}
+                              type={col.type === "number" ? "number" : col.type === "date" ? "date" : "text"}
+                              placeholder={col.label}
+                              value={asString(row[col.key])}
+                              onChange={(e) =>
+                                updateRow(
+                                  field,
+                                  asString(row.id),
+                                  col.key,
+                                  col.type === "number" ? parseFloat(e.target.value) || 0 : e.target.value
+                                )
+                              }
+                            />
+                          ))}
+                          {isMoney && (
+                            <div
+                              className="text-xs font-semibold text-right flex-shrink-0"
+                              style={{ fontFamily: "'DM Mono', monospace", color: "#1C2340", minWidth: currency === "FCFA" ? 108 : 88 }}
+                            >
+                              {formatMoney(asNumber(row.qty) * asNumber(row.unitPrice), currency)}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeRow(field, asString(row.id))}
+                            className="text-muted-foreground hover:text-destructive p-1"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )
+                    )}
+                    <div className="flex flex-wrap gap-3 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => addRow(field)}
+                        className="flex items-center gap-1.5 text-xs font-semibold"
+                        style={{ color: "#B8923A" }}
+                      >
+                        <PlusCircle size={14} />
+                        Ajouter une ligne
+                      </button>
+                      {allowPhotos ? (
+                        <button
+                          type="button"
+                          onClick={() => addPhotoRow(field)}
+                          className="flex items-center gap-1.5 text-xs font-semibold"
+                          style={{ color: "#1C2340" }}
+                        >
+                          <ImagePlus size={14} />
+                          Ajouter une photo
                         </button>
-                      </div>
-                    ))}
-                    <button
-                      onClick={() => addRow(field)}
-                      className="flex items-center gap-1.5 text-xs font-semibold"
-                      style={{ color: "#B8923A" }}
-                    >
-                      <PlusCircle size={14} />
-                      Ajouter une ligne
-                    </button>
+                      ) : null}
+                    </div>
                   </div>
                 );
               }
@@ -145,7 +224,14 @@ export function DocumentForm({
                       <input
                         type="checkbox"
                         checked={asBool(data[field.key])}
-                        onChange={(e) => set(field.key, e.target.checked, { immediate: true })}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          if (field.key === "showTva" && checked && asNumber(data.taxRate) <= 0) {
+                            patch({ ...data, showTva: true, taxRate: 20 }, { immediate: true });
+                            return;
+                          }
+                          set(field.key, checked, { immediate: true });
+                        }}
                       />
                       <span className={fieldLbl + " mb-0"}>{field.label}</span>
                     </label>

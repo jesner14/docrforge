@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Organisme } from "../lib/types";
 import { ORG_SYSTEM, newOrganisme } from "../lib/access";
-import { CURRENCY_OPTIONS, inp, lbl } from "../lib/helpers";
+import { CURRENCY_OPTIONS, HEADER_COLOR_PRESETS, asHeaderColor, inp, lbl } from "../lib/helpers";
 
 export function OrganismesPage({
   organismes,
@@ -17,7 +17,11 @@ export function OrganismesPage({
 
   const save = () => {
     if (!editing || !editing.name.trim()) return;
-    const clean = { ...editing, name: editing.name.trim() };
+    const clean = {
+      ...editing,
+      name: editing.name.trim(),
+      headerColor: asHeaderColor(editing.headerColor),
+    };
     const exists = organismes.some((o) => o.id === clean.id);
     let next = exists ? organismes.map((o) => (o.id === clean.id ? clean : o)) : [clean, ...organismes];
     const systemOrg = organismes.find((o) => o.id === ORG_SYSTEM);
@@ -119,7 +123,70 @@ export function OrganismesPage({
               </div>
               <div>
                 <label className={lbl}>Adresse</label>
-                <textarea className={inp} rows={2} value={editing.address} onChange={(e) => setEditing({ ...editing, address: e.target.value })} />
+                <textarea
+                  className={inp}
+                  rows={3}
+                  maxLength={500}
+                  value={editing.address}
+                  onChange={(e) => setEditing({ ...editing, address: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>NINEA</label>
+                  <input
+                    className={inp}
+                    value={editing.ninea || ""}
+                    placeholder="Ex. 0XXXXXXX2A2"
+                    onChange={(e) => setEditing({ ...editing, ninea: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>RC</label>
+                  <input
+                    className={inp}
+                    value={editing.rc || ""}
+                    placeholder="Registre de commerce"
+                    onChange={(e) => setEditing({ ...editing, rc: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={lbl}>RIB</label>
+                <input
+                  className={inp}
+                  value={editing.rib || ""}
+                  placeholder="IBAN / RIB"
+                  onChange={(e) => setEditing({ ...editing, rib: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>Téléphone (TEL)</label>
+                  <input
+                    className={inp}
+                    value={editing.phone || ""}
+                    onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>Site web</label>
+                  <input
+                    className={inp}
+                    value={editing.website || ""}
+                    placeholder="https://…"
+                    onChange={(e) => setEditing({ ...editing, website: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={lbl}>Slogan (pied de page)</label>
+                <input
+                  className={inp}
+                  value={editing.slogan || ""}
+                  placeholder="Notre expertise à votre service"
+                  onChange={(e) => setEditing({ ...editing, slogan: e.target.value })}
+                />
               </div>
               <div>
                 <label className={lbl}>Devise par défaut</label>
@@ -130,6 +197,34 @@ export function OrganismesPage({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <div className={lbl}>Couleur d’en-tête</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {HEADER_COLOR_PRESETS.map((p) => {
+                    const active = asHeaderColor(editing.headerColor) === p.value.toUpperCase();
+                    const isLight = p.value === "#FFFFFF" || p.value === "#F5C518";
+                    return (
+                      <button
+                        key={p.value}
+                        type="button"
+                        title={p.label}
+                        onClick={() => setEditing({ ...editing, headerColor: p.value })}
+                        className="w-7 h-7 rounded-md border-2"
+                        style={{
+                          background: p.value,
+                          borderColor: active ? "#B8923A" : isLight ? "rgba(28,35,64,0.25)" : "rgba(28,35,64,0.12)",
+                        }}
+                      />
+                    );
+                  })}
+                  <input
+                    type="color"
+                    className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
+                    value={asHeaderColor(editing.headerColor)}
+                    onChange={(e) => setEditing({ ...editing, headerColor: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">

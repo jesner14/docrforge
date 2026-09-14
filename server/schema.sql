@@ -5,7 +5,20 @@ CREATE TABLE IF NOT EXISTS organismes (
   email TEXT NOT NULL DEFAULT '',
   phone TEXT NOT NULL DEFAULT '',
   logo TEXT NOT NULL DEFAULT '',
-  currency TEXT NOT NULL DEFAULT 'EUR' CHECK (currency IN ('EUR', 'USD', 'FCFA'))
+  currency TEXT NOT NULL DEFAULT 'EUR' CHECK (currency IN ('EUR', 'USD', 'FCFA')),
+  ninea TEXT NOT NULL DEFAULT '',
+  rc TEXT NOT NULL DEFAULT '',
+  rib TEXT NOT NULL DEFAULT '',
+  website TEXT NOT NULL DEFAULT '',
+  slogan TEXT NOT NULL DEFAULT '',
+  header_color TEXT NOT NULL DEFAULT '#1C2340',
+  footer_color TEXT NOT NULL DEFAULT '#2F4F9A',
+  logo_in_header BOOLEAN NOT NULL DEFAULT TRUE,
+  logo_as_background BOOLEAN NOT NULL DEFAULT FALSE,
+  header_name_align TEXT NOT NULL DEFAULT 'left',
+  logo_align TEXT NOT NULL DEFAULT 'left',
+  logo_scale INTEGER NOT NULL DEFAULT 1,
+  show_header_doc_ref BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE TABLE IF NOT EXISTS profiles (

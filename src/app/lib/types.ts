@@ -26,6 +26,8 @@ export type LayoutKind =
   | "quote"
   | "purchase-order"
   | "receipt"
+  | "delivery-note"
+  | "submission-letter"
   | "minutes"
   | "official-minutes"
   | "letter"
@@ -116,6 +118,32 @@ export interface Organisme {
   phone: string;
   logo: string;
   currency: "EUR" | "USD" | "FCFA";
+  /** Numéro NINEA (Sénégal) */
+  ninea?: string;
+  /** Registre de commerce */
+  rc?: string;
+  /** RIB / IBAN */
+  rib?: string;
+  /** Site web */
+  website?: string;
+  /** Slogan affiché en dernière ligne du pied de page */
+  slogan?: string;
+  /** Couleur d’en-tête des documents (bandeau facture, etc.) */
+  headerColor?: string;
+  /** Couleur du pied de page des factures */
+  footerColor?: string;
+  /** Afficher le logo dans le bandeau d’en-tête */
+  logoInHeader?: boolean;
+  /** Logo en filigrane (fond de page, opacité 10 %) */
+  logoAsBackground?: boolean;
+  /** Position du nom d’entreprise dans l’en-tête : left | right */
+  headerNameAlign?: "left" | "right";
+  /** Position du logo dans l’en-tête : left | right */
+  logoAlign?: "left" | "right";
+  /** Taille du logo d’en-tête : 1 | 2 | 3 | 4 */
+  logoScale?: 1 | 2 | 3 | 4;
+  /** Afficher type de doc + devise + numéro dans l’en-tête */
+  showHeaderDocRef?: boolean;
 }
 
 export interface Profile {
@@ -138,6 +166,20 @@ export interface User {
   companyEmail: string;
   companyPhone: string;
   companyLogo?: string;
+  /** NINEA de l’organisme (injecté depuis le paramétrage) */
+  companyNinea?: string;
+  companyRc?: string;
+  companyRib?: string;
+  companyWebsite?: string;
+  companySlogan?: string;
+  companyHeaderColor?: string;
+  companyFooterColor?: string;
+  companyLogoInHeader?: boolean;
+  companyLogoAsBackground?: boolean;
+  companyHeaderNameAlign?: "left" | "right";
+  companyLogoAlign?: "left" | "right";
+  companyLogoScale?: 1 | 2 | 3 | 4;
+  companyShowHeaderDocRef?: boolean;
   initials: string;
   /** Premier pôle métier du profil, pour la rétrocompatibilité. */
   role: Role;

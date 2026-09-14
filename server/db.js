@@ -24,6 +24,20 @@ export async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS idx_profiles_org ON profiles(organisme_id)`);
   await query(`UPDATE profiles SET organisme_id = $1 WHERE id = 'p-superadmin' AND organisme_id IS NULL`, [ORG_SYSTEM]);
   await query(`UPDATE profiles SET organisme_id = $1 WHERE organisme_id IS NULL AND id <> 'p-superadmin'`, [ORG_SYSTEM]);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS ninea TEXT NOT NULL DEFAULT ''`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS rc TEXT NOT NULL DEFAULT ''`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS rib TEXT NOT NULL DEFAULT ''`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS website TEXT NOT NULL DEFAULT ''`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS slogan TEXT NOT NULL DEFAULT ''`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS header_color TEXT NOT NULL DEFAULT '#1C2340'`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS footer_color TEXT NOT NULL DEFAULT '#2F4F9A'`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS logo_in_header BOOLEAN NOT NULL DEFAULT TRUE`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS logo_as_background BOOLEAN NOT NULL DEFAULT FALSE`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS header_name_align TEXT NOT NULL DEFAULT 'left'`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS logo_align TEXT NOT NULL DEFAULT 'left'`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS logo_scale INTEGER NOT NULL DEFAULT 1`);
+  await query(`ALTER TABLE organismes ADD COLUMN IF NOT EXISTS show_header_doc_ref BOOLEAN NOT NULL DEFAULT TRUE`);
+  // Adresse longue (au moins 200 caractères utiles) — TEXT n’impose pas de plafond.
   // Ajoute l'écran « locations » aux profils assistante / superadmin existants
   await query(`
     UPDATE profiles

@@ -17,6 +17,19 @@ function rowToOrganisme(row) {
     phone: row.phone,
     logo: row.logo,
     currency: row.currency,
+    ninea: row.ninea || "",
+    rc: row.rc || "",
+    rib: row.rib || "",
+    website: row.website || "",
+    slogan: row.slogan || "",
+    headerColor: row.header_color || "#1C2340",
+    footerColor: row.footer_color || "#2F4F9A",
+    logoInHeader: row.logo_in_header !== false,
+    logoAsBackground: !!row.logo_as_background,
+    headerNameAlign: row.header_name_align === "right" ? "right" : "left",
+    logoAlign: row.logo_align === "right" ? "right" : "left",
+    logoScale: row.logo_scale === 2 || row.logo_scale === 3 || row.logo_scale === 4 ? row.logo_scale : 1,
+    showHeaderDocRef: row.show_header_doc_ref !== false,
   };
 }
 
@@ -73,7 +86,14 @@ async function loadOrganismes() {
 async function loadUsers(includePasswords) {
   const { rows } = await query(
     `SELECT u.*, o.name AS org_name, o.address AS org_address, o.email AS org_email,
-            o.phone AS org_phone, o.logo AS org_logo, o.currency AS org_currency
+            o.phone AS org_phone, o.logo AS org_logo, o.currency AS org_currency,
+            o.ninea AS org_ninea, o.rc AS org_rc, o.rib AS org_rib, o.website AS org_website,
+            o.slogan AS org_slogan,
+            o.header_color AS org_header_color, o.footer_color AS org_footer_color,
+            o.logo_in_header AS org_logo_in_header, o.logo_as_background AS org_logo_as_background,
+            o.header_name_align AS org_header_name_align, o.logo_align AS org_logo_align,
+            o.logo_scale AS org_logo_scale,
+            o.show_header_doc_ref AS org_show_header_doc_ref
      FROM users u
      JOIN organismes o ON o.id = u.organisme_id
      ORDER BY u.name`
@@ -180,16 +200,50 @@ export function registerDataRoutes(app) {
       }
       for (const o of organismes) {
         await query(
-          `INSERT INTO organismes (id, name, address, email, phone, logo, currency)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)
+          `INSERT INTO organismes (id, name, address, email, phone, logo, currency, ninea, rc, rib, website, slogan, header_color, footer_color, logo_in_header, logo_as_background, header_name_align, logo_align, logo_scale, show_header_doc_ref)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
            ON CONFLICT (id) DO UPDATE SET
              name = EXCLUDED.name,
              address = EXCLUDED.address,
              email = EXCLUDED.email,
              phone = EXCLUDED.phone,
              logo = EXCLUDED.logo,
-             currency = EXCLUDED.currency`,
-          [o.id, o.name, o.address, o.email || "", o.phone || "", o.logo || "", o.currency || "EUR"]
+             currency = EXCLUDED.currency,
+             ninea = EXCLUDED.ninea,
+             rc = EXCLUDED.rc,
+             rib = EXCLUDED.rib,
+             website = EXCLUDED.website,
+             slogan = EXCLUDED.slogan,
+             header_color = EXCLUDED.header_color,
+             footer_color = EXCLUDED.footer_color,
+             logo_in_header = EXCLUDED.logo_in_header,
+             logo_as_background = EXCLUDED.logo_as_background,
+             header_name_align = EXCLUDED.header_name_align,
+             logo_align = EXCLUDED.logo_align,
+             logo_scale = EXCLUDED.logo_scale,
+             show_header_doc_ref = EXCLUDED.show_header_doc_ref`,
+          [
+            o.id,
+            o.name,
+            o.address || "",
+            o.email || "",
+            o.phone || "",
+            o.logo || "",
+            o.currency || "EUR",
+            o.ninea || "",
+            o.rc || "",
+            o.rib || "",
+            o.website || "",
+            o.slogan || "",
+            o.headerColor || "#1C2340",
+            o.footerColor || "#2F4F9A",
+            o.logoInHeader !== false,
+            !!o.logoAsBackground,
+            o.headerNameAlign === "right" ? "right" : "left",
+            o.logoAlign === "right" ? "right" : "left",
+            o.logoScale === 2 || o.logoScale === 3 || o.logoScale === 4 ? o.logoScale : 1,
+            o.showHeaderDocRef !== false,
+          ]
         );
       }
       await query("COMMIT");
@@ -308,7 +362,10 @@ export function registerDataRoutes(app) {
             u.profileId,
             u.organismeId,
             u.title || "",
-            u.companyEmail || "",
+            (() => {
+              const email = String(u.companyEmail || "").trim();
+              return email.endsWith(".local") ? "" : email;
+            })(),
             u.companyPhone || "",
             u.initials || "",
             u.role || "facturation",

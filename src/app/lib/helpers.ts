@@ -78,9 +78,82 @@ export function interpolate(text: string, data: DocData) {
 }
 
 export function statusColor(s: string) {
-  if (s === "Envoyé") return "#2C5F2E";
+  if (s === "Envoyé" || s === "Finalisé") return "#2C5F2E";
+  if (s === "Enregistré") return "#0E7C7B";
   if (s === "Brouillon") return "#7B4F00";
   return "#1C2340";
+}
+
+/** Couleur d’en-tête documents par défaut (bleu nuit). */
+export const DEFAULT_HEADER_COLOR = "#1C2340";
+
+/** Couleur de pied de page facture par défaut. */
+export const DEFAULT_FOOTER_COLOR = "#2F4F9A";
+
+export const HEADER_COLOR_PRESETS: { label: string; value: string }[] = [
+  { label: "Bleu nuit", value: "#1C2340" },
+  { label: "Bleu marine", value: "#1B3A5C" },
+  { label: "Bleu pied", value: "#2F4F9A" },
+  { label: "Vert forêt", value: "#1E4D3A" },
+  { label: "Bordeaux", value: "#5C1A1A" },
+  { label: "Anthracite", value: "#2C2C2C" },
+  { label: "Prune", value: "#4A1942" },
+  { label: "Jaune", value: "#F5C518" },
+  { label: "Blanc", value: "#FFFFFF" },
+];
+
+/** Normalise une couleur hex (#RGB / #RRGGBB), sinon défaut. */
+export function asHeaderColor(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(raw)) return raw.toUpperCase();
+  if (/^#[0-9A-Fa-f]{3}$/.test(raw)) {
+    const r = raw[1];
+    const g = raw[2];
+    const b = raw[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+  return DEFAULT_HEADER_COLOR;
+}
+
+export function asFooterColor(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(raw)) return raw.toUpperCase();
+  if (/^#[0-9A-Fa-f]{3}$/.test(raw)) {
+    const r = raw[1];
+    const g = raw[2];
+    const b = raw[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+  return DEFAULT_FOOTER_COLOR;
+}
+
+/** Texte lisible sur un fond d’en-tête (clair → bleu nuit, sombre → blanc). */
+export function headerForeground(bg: unknown): string {
+  const hex = asHeaderColor(bg).slice(1);
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? DEFAULT_HEADER_COLOR : "#FFFFFF";
+}
+
+export type HeaderNameAlign = "left" | "right";
+
+export function asHeaderNameAlign(value: unknown): HeaderNameAlign {
+  return value === "right" ? "right" : "left";
+}
+
+/** Échelle du logo d’en-tête (×1 … ×4). Taille de base = 56 px. */
+export type LogoScale = 1 | 2 | 3 | 4;
+
+export function asLogoScale(value: unknown): LogoScale {
+  const n = Number(value);
+  if (n === 2 || n === 3 || n === 4) return n;
+  return 1;
+}
+
+export function logoHeaderSizePx(scale: unknown): number {
+  return 56 * asLogoScale(scale);
 }
 
 export const inp =

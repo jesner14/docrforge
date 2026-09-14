@@ -20,10 +20,11 @@ const ITEM_COLS = [
 function invoiceFields(): TemplateField[] {
   return [
     { key: "showLegal", label: "Afficher SIRET et n° TVA", type: "checkbox", section: "Options d'affichage" },
-    { key: "showTva", label: "Afficher le détail TVA (HT / TVA / TTC)", type: "checkbox", section: "Options d'affichage" },
+    { key: "showTva", label: "Afficher la TVA", type: "checkbox", section: "Options d'affichage" },
     { key: "showDueDate", label: "Afficher la date d'échéance", type: "checkbox", section: "Options d'affichage" },
     { key: "showObject", label: "Afficher l'objet", type: "checkbox", section: "Options d'affichage" },
     { key: "showNotes", label: "Afficher les notes / mentions", type: "checkbox", section: "Options d'affichage" },
+    { key: "showClientBand", label: "Afficher le bloc destinataire (dates, devise)", type: "checkbox", section: "Options d'affichage" },
     { key: "companySiret", label: "SIRET", type: "text", section: "Informations légales", showWhen: "showLegal" },
     { key: "companyTva", label: "N° TVA", type: "text", section: "Informations légales", showWhen: "showLegal" },
     ...clientFields("Client"),
@@ -45,7 +46,7 @@ function invoiceFields(): TemplateField[] {
       columns: ITEM_COLS,
       section: "Lignes",
     },
-    { key: "taxRate", label: "TVA (%)", type: "number", section: "Lignes", showWhen: "showTva" },
+    { key: "taxRate", label: "Taux de TVA (%)", type: "number", section: "Lignes", showWhen: "showTva" },
     { key: "notes", label: "Notes / mentions", type: "textarea", section: "Notes", showWhen: "showNotes" },
   ];
 }
@@ -143,9 +144,126 @@ export const BUILTIN_TEMPLATES: DocTemplate[] = [
       showDueDate: true,
       showObject: false,
       showNotes: true,
+      showClientBand: true,
       taxRate: 20,
       notes: "Merci pour votre confiance.",
     }),
+  },
+  {
+    id: "bon-livraison",
+    name: "Bon de livraison",
+    category: "facturation",
+    description: "Livraison client — en-tête et pied dédiés, mêmes lignes que la facture",
+    icon: "🚚",
+    color: "#0E7C7B",
+    layout: "delivery-note",
+    builtin: true,
+    fields: [
+      { key: "showTva", label: "Afficher la TVA", type: "checkbox", section: "Options d'affichage" },
+      ...clientFields("Client"),
+      { key: "clientRef", label: "Référence client", type: "text", section: "Client" },
+      { key: "attentionOf", label: "À l'attention de", type: "text", section: "Client" },
+      { key: "docNumber", label: "N° bon de livraison", type: "text", section: "Document" },
+      { key: "date", label: "Date", type: "date", section: "Document" },
+      {
+        key: "currency",
+        label: "Devise",
+        type: "select",
+        options: ["EUR", "USD", "FCFA"],
+        section: "Document",
+      },
+      { key: "generalComment", label: "Commentaire général", type: "textarea", section: "Document" },
+      {
+        key: "items",
+        label: "Lignes",
+        type: "table",
+        columns: ITEM_COLS,
+        section: "Lignes",
+      },
+      { key: "taxRate", label: "Taux de TVA (%)", type: "number", section: "Lignes", showWhen: "showTva" },
+      {
+        key: "receptionNotes",
+        label: "Observation(s) lors de la réception",
+        type: "textarea",
+        section: "Réception",
+      },
+      {
+        key: "receiverName",
+        label: "Nom du réceptionnaire",
+        type: "text",
+        section: "Réception",
+      },
+    ],
+    defaults: commercialDefaults(null, {
+      docNumber: "001",
+      showTva: false,
+      taxRate: 20,
+      clientRef: "",
+      attentionOf: "",
+      generalComment: "",
+      receptionNotes: "",
+      receiverName: "",
+    }),
+  },
+  {
+    id: "lettre-soumission",
+    name: "Lettre de soumission",
+    category: "facturation",
+    description: "Offre formelle — format lettre de soumission (entente directe)",
+    icon: "📨",
+    color: "#1C2340",
+    layout: "submission-letter",
+    builtin: true,
+    fields: [
+      {
+        key: "showLogoBackground",
+        label: "Afficher le logo en arrière-plan (filigrane)",
+        type: "checkbox",
+        section: "Options d'affichage",
+      },
+      { key: "date", label: "Date", type: "date", section: "Document" },
+      { key: "city", label: "Ville", type: "text", section: "Document" },
+      {
+        key: "recipientBlock",
+        label: "Destinataire (bloc adresse lettre)",
+        type: "textarea",
+        section: "Destinataire",
+      },
+      { key: "clientName", label: "Nom / organisme (en-tête)", type: "text", section: "Destinataire" },
+      { key: "clientAddress", label: "Adresse (en-tête)", type: "textarea", section: "Destinataire" },
+      { key: "clientEmail", label: "E-mail (en-tête)", type: "email", section: "Destinataire" },
+      { key: "object", label: "Objet", type: "text", section: "Document" },
+      { key: "reference", label: "Référence", type: "text", section: "Document" },
+      { key: "salutation", label: "Appel", type: "text", section: "Document" },
+      {
+        key: "supplyDescription",
+        label: "Fournitures / livraison (libellé)",
+        type: "text",
+        section: "Offre",
+      },
+      { key: "offerAmount", label: "Montant de l'offre", type: "text", section: "Offre" },
+      { key: "validityDays", label: "Durée de validité (jours)", type: "number", section: "Offre" },
+      { key: "signatory", label: "Nom du signataire", type: "text", section: "Signature" },
+      { key: "signatoryTitle", label: "Fonction du signataire", type: "text", section: "Signature" },
+    ],
+    defaults: {
+      showLogoBackground: false,
+      date: "2026-04-03",
+      city: "Dakar",
+      clientName: "Caisse des Dépôts et Consignations",
+      clientAddress: "9937 ; Amitié 3 Lotissement Ecole de Police ; en face VDN, Dakar-Sénégal",
+      clientEmail: "",
+      recipientBlock:
+        "A Monsieur le Directeur général de la Caisse des Dépôts et Consignations, 9937 ; Amitié 3 Lotissement Ecole de Police ; en face VDN, Dakar-Sénégal",
+      object: "Acquisition de matériel et équipement informatique",
+      reference: "F_19_DAMG_2026",
+      salutation: "Monsieur le Directeur,",
+      supplyDescription: "le matériel et équipements informatique",
+      offerAmount: "",
+      validityDays: 20,
+      signatory: "",
+      signatoryTitle: "",
+    },
   },
   {
     id: "devis",
@@ -801,6 +919,10 @@ export function recipientOf(data: Record<string, unknown>) {
 
 export function documentTitle(template: DocTemplate, data: Record<string, unknown>) {
   const num = data.docNumber ? ` #${data.docNumber}` : "";
+  if (template.id === "lettre-soumission" || template.layout === "submission-letter") {
+    const ref = data.reference ? ` — ${data.reference}` : "";
+    return `Lettre de soumission${ref}`;
+  }
   const title = data.title ? String(data.title) : template.name;
   return `${title}${num}`;
 }

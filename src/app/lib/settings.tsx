@@ -10,7 +10,7 @@ export type OrganismesUpdater = Organisme[] | ((prev: Organisme[]) => Organisme[
 const Ctx = createContext<{
   organisme: Organisme;
   currency: CurrencyCode;
-  updateOrganisme: (patch: Partial<Organisme>) => void;
+  updateOrganisme: (patch: Partial<Organisme>) => void | Promise<void>;
 } | null>(null);
 
 export function OrganismeProvider({
@@ -34,7 +34,7 @@ export function OrganismeProvider({
   const updateOrganisme = useCallback(
     (patch: Partial<Organisme>) => {
       const orgId = user.organismeId;
-      onOrganismesChange((prev) =>
+      return onOrganismesChange((prev) =>
         prev.map((o) => {
           if (o.id !== orgId) return o;
           const next = { ...o, ...patch };

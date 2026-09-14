@@ -59,7 +59,7 @@ export function UsersPage({
           password,
           name: editing.name.trim(),
           initials: editing.initials || initialsFrom(editing.name),
-          companyEmail: editing.companyEmail || `${login}@${org?.name.toLowerCase().replace(/\s+/g, "-") || "organisme"}.local`,
+          companyEmail: editing.companyEmail.trim(),
         },
         org
       ),
