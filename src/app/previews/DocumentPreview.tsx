@@ -98,9 +98,7 @@ function CompanyHead({ data, kicker, showLegal: _showLegal = false }: { data: Do
   const accent = useDocHeaderColor(data);
   const { inHeader, logo } = useDocLogoOptions(data);
   const { organisme } = useOrganisme();
-  const nameAlign = asHeaderNameAlign(data.companyHeaderNameAlign || organisme.headerNameAlign);
   const logoAlign = asHeaderNameAlign(data.companyLogoAlign || organisme.logoAlign);
-  const nameRight = nameAlign === "right";
   const logoRight = logoAlign === "right";
   const showDocRef = asBool(data.companyShowHeaderDocRef, organisme.showHeaderDocRef !== false);
   const logoSize = logoHeaderSizePx(data.companyLogoScale ?? organisme.logoScale);
@@ -119,8 +117,42 @@ function CompanyHead({ data, kicker, showLegal: _showLegal = false }: { data: Do
     />
   ) : null;
 
+  const companyEl = (
+    <div className="min-w-0" style={{ textAlign: "left" }}>
+      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.25rem", fontWeight: 700, wordBreak: "break-word" }}>
+        {asString(data.companyName, "—")}
+      </div>
+    </div>
+  );
+
   const clientEl = (
-    <div className="min-w-0" style={{ textAlign: nameRight ? "right" : "left", width: nameRight ? "100%" : undefined }}>
+    <div className="min-w-0" style={{ textAlign: "right", width: "100%" }}>
+      <div
+        style={{
+          fontSize: "0.72rem",
+          textTransform: "uppercase",
+          letterSpacing: "0.14em",
+          fontWeight: 700,
+          color: fg,
+          marginBottom: showDocRef && data.docNumber ? 6 : 10,
+        }}
+      >
+        {kicker}
+      </div>
+      {showDocRef && data.docNumber ? (
+        <div
+          style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: "1.05rem",
+            fontWeight: 500,
+            color: fg === "#FFFFFF" ? "#FFFFFF" : "#000000",
+            wordBreak: "break-all",
+            marginBottom: 10,
+          }}
+        >
+          #{asString(data.docNumber)}
+        </div>
+      ) : null}
       {asString(data.date) ? (
         <div style={{ color: muted, fontSize: "0.72rem", marginBottom: 6, letterSpacing: "0.01em" }}>
           {asString(data.city, "Dakar")}, le {formatDateFr(asString(data.date))}
@@ -142,36 +174,6 @@ function CompanyHead({ data, kicker, showLegal: _showLegal = false }: { data: Do
     </div>
   );
 
-  const docEl = (
-    <div className="min-w-0">
-      <div
-        style={{
-          fontSize: "0.72rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.14em",
-          fontWeight: 700,
-          color: fg,
-          marginBottom: showDocRef && data.docNumber ? 6 : 0,
-        }}
-      >
-        {kicker}
-      </div>
-      {showDocRef && data.docNumber ? (
-        <div
-          style={{
-            fontFamily: "'DM Mono', monospace",
-            fontSize: "1.05rem",
-            fontWeight: 500,
-            color: fg === "#FFFFFF" ? "#FFFFFF" : "#000000",
-            wordBreak: "break-all",
-          }}
-        >
-          #{asString(data.docNumber)}
-        </div>
-      ) : null}
-    </div>
-  );
-
   return (
     <div
       className="px-6 sm:px-8 py-8"
@@ -183,29 +185,22 @@ function CompanyHead({ data, kicker, showLegal: _showLegal = false }: { data: Do
       }}
     >
       <div className="flex justify-between items-start gap-4 w-full">
-        <div
-          className="flex items-start gap-3 min-w-0"
-          style={{
-            textAlign: "left",
-            flex: nameRight ? "0 1 auto" : "1 1 0%",
-          }}
-        >
+        <div className="flex items-start gap-3 min-w-0" style={{ textAlign: "left", flex: "1 1 0%" }}>
           {inHeader && !logoRight ? logoEl : null}
-          {!nameRight ? clientEl : docEl}
+          {companyEl}
+          {inHeader && logoRight ? logoEl : null}
         </div>
         <div
-          className="flex items-start gap-3 min-w-0"
+          className="flex items-start min-w-0"
           style={{
             textAlign: "right",
             marginLeft: "auto",
             justifyContent: "flex-end",
-            alignItems: "flex-start",
-            flex: nameRight ? "1 1 0%" : "0 1 auto",
-            maxWidth: nameRight ? "58%" : undefined,
+            flex: "1 1 0%",
+            maxWidth: "55%",
           }}
         >
-          {inHeader && logoRight ? logoEl : null}
-          {nameRight ? clientEl : docEl}
+          {clientEl}
         </div>
       </div>
     </div>
