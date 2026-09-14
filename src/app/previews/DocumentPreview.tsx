@@ -828,7 +828,22 @@ function Commercial({
   return (
     <Sheet accent={accent} watermark={watermark}>
       <CompanyHead data={data} kicker={title} showLegal={showLegal} />
-      {showClientBand ? <ClientBand data={data} showDueDate={showDueDate} showObject={showObject} /> : null}
+      {showObject ? (
+        <div
+          className="px-6 sm:px-8 py-3"
+          style={{
+            boxSizing: "border-box",
+            borderBottom: "1px solid rgba(28,35,64,0.06)",
+            fontSize: "0.88rem",
+            color: "#1C2340",
+            textAlign: "left",
+          }}
+        >
+          <span style={{ fontWeight: 700 }}>Objet&nbsp;:</span>{" "}
+          <span style={{ color: asString(data.object) ? "#333" : "#bbb" }}>{asString(data.object, "—")}</span>
+        </div>
+      ) : null}
+      {showClientBand ? <ClientBand data={data} showDueDate={showDueDate} showObject={false} /> : null}
       <LineTable data={data} showTax={showTax} showNotes={showNotes} />
       {footerLines.length > 0 ? (
         <div
@@ -1046,7 +1061,7 @@ export function DocumentPreview({
           showTax={showTax}
           showLegal={asBool(data.showLegal)}
           showDueDate={asBool(data.showDueDate, true)}
-          showObject={asBool(data.showObject)}
+          showObject
           showNotes={asBool(data.showNotes, true)}
           showClientBand={asBool(data.showClientBand, true)}
         />
